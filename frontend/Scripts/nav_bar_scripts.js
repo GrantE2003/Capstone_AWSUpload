@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       toggleBtn.setAttribute('aria-expanded', String(newState));
       
-      // Toggle the hidden attribute - CSS will handle visibility based on screen size
+      // Toggle the hidden attribute
       collapsible.hidden = !newState;
       
       if (newState) {
@@ -78,8 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const q = input.value.trim().toLowerCase();
-      // TODO: filter your article cards here
-      // Example: document.querySelectorAll('.card').forEach(card => { ... });
       console.log('Search query:', q);
     });
   }
