@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+
+    <!--Generic Data-->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Science | Multi-Source Article Synthesizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!--Style Sheets-->
+    <link rel="stylesheet" href="/styles/nav_bar.css">
+    <link rel="stylesheet" href="/styles/footer.css">
+    <link rel="stylesheet" href="/styles/page_content.css">
+
+  </head>
+
+  <body style="background: #7faabf;">
+
+    <!--Navigation Bar-->
+    <header class="site-header" role="banner">
+
+      <!--Non-Collapsable Portion of Navigation Bar-->
+      <nav class="nav" aria-label="Primary">
+
+        <!--Website Title-->
+        <h1><a class="app_name">Multi-Source Article Synthesizer</a></h1>
+
+        <!--Button Collapse-->
+        <button id="navToggle"
+          class="nav_toggle"
+          aria-controls="headerCollapsible"
+          aria-expanded="false"
+          aria-label="Toggle menu">☰</button>
+      </nav>
+
+    <!--Collapsable Content-->
+
+    <div id="collapsableContent" hidden>
+
+      <!--Navigation Links-->
+      <nav class="topics-pills" aria-label="Popular Topics">
+        <a class="pill" href="/Pages/world_news.html">World</a>
+        <a class="pill" href="/Pages/united_states.html">U.S.</a>
+        <a class="pill" href="/Pages/business.html">Business</a>
+        <a class="pill" href="/Pages/technology.html">Technology</a>
+        <a class="pill" href="/">Home</a>
+        <a class="pill" href="/Pages/sports.html">Sports</a>
+        <a class="pill" href="/Pages/entertainment.html">Entertainment</a>
+        
+        <a class="pill" href="/Pages/health.html">Health</a>
+        <a class="pill" href="/Pages/politics.html">Politics</a>
+      </nav>
+
+      <!--Search Bar-->
+      <section class="search_bar" aria-label="Custom Search">
+        <form id="searchform" role="search" aria-label="Search all topics">
+          <label for="searchInput" class="sr-only">Search all topics...</label>
+          <input id="searchInput" type="search" placeholder="Search all topics..." aria-describedby="searchHelp">
+          <button type="submit" class="search_btn">Search</button>
+        </form>
+      </section>
+    </div>
+
+    </header>
+
+    <!--Main Page with Content-->
+    <main style="background: #7faabf;">
+        <h2>Science Page</h2>
+    </main>
+
+    <!--Page Footer-->
+    <footer>
+      <div class="footer_content">
+        <p>© 2025 Multi-Source Article Synthesizer</p>
+      </div>
+    </footer>
+
+    <!--Scripts.js Reference-->
+    <script src="/Scripts/location_service.js" defer></script>
+    <script src="/Scripts/country_selector.js" defer></script>
+    <script src="/Scripts/nav_bar_scripts.js" defer></script>
+    <script src="/Scripts/search_bar.js" defer></script>
+    <script src="/Scripts/article_loader.js" defer></script>
+
+  </body>
+</html>
+
+

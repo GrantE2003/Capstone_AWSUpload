@@ -1,0 +1,367 @@
+/* ===============================
+   Theme Variables
+================================*/
+header.site-header {
+
+  --text: #000000;
+  --muted: #6b7280;
+  --header-bg: #a3b4c7;
+  --border: #ffffff;
+  --accent: #4364ac;
+  --pill-bg: #ffffff;
+  --pill-text: #000000;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.1);
+}
+
+/* ===============================
+   Base Layout
+================================*/
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.5;
+}
+
+img, svg { max-width: 100%; display: block; }
+
+main { 
+  flex: 1; 
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  background: var(--bg);
+}
+
+main h2 {
+  margin-bottom: 1rem;
+  font-size: 1.75rem;
+  color: var(--text);
+}
+
+h1 { line-height: 1.5; margin: 0; }
+
+/* ===============================
+   Reader / Navigation Bar
+================================*/
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+/* Navigation bar wrapper */
+.nav {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center all content */
+  position: relative;       /* enables absolute hamburger positioning */
+  padding: .75rem 1rem;
+  text-align: center;
+}
+
+/* Website Title */
+.app_name {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 2.0rem;
+  display: inline-block;
+  margin: 0;
+}
+
+/* Hamburger Button */
+.nav_toggle {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  background: var(--pill-bg);
+  border: 1px solid var(--border);
+  border-radius: .375rem;
+  padding: .4rem .6rem;
+  font-size: 1.25rem;
+  cursor: pointer;
+  z-index: 20;
+}
+
+.nav_toggle:hover,
+.nav_toggle:focus {
+  background: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--border);
+}
+
+/* ===============================
+   Collapsible Section (Topics + Search)
+================================*/
+#collapsableContent {
+  padding: .5rem 1rem 1rem;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out;
+  overflow: hidden;
+}
+
+#collapsableContent[hidden] {
+  display: none !important;
+}
+
+/* ===============================
+   Responsive Behavior
+================================*/
+/* Mobile: Hide collapsible content by default, show hamburger */
+@media (max-width: 767px) {
+  #collapsableContent {
+    max-height: 0;
+    padding: 0 1rem;
+    opacity: 0;
+    border-bottom: none;
+    display: block !important;
+  }
+
+  #collapsableContent:not([hidden]) {
+    max-height: 500px;
+    padding: .5rem 1rem 1rem;
+    opacity: 1;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #collapsableContent[hidden] {
+    max-height: 0 !important;
+    padding: 0 1rem !important;
+    opacity: 0 !important;
+    border-bottom: none !important;
+    display: block !important;
+  }
+
+  .nav_toggle {
+    display: inline-flex;
+  }
+}
+
+/* Desktop: Make collapsible content toggleable, keep hamburger visible */
+@media (min-width: 768px) {
+  #collapsableContent {
+    max-height: 500px;
+    padding: .5rem 1rem 1rem;
+    opacity: 1;
+    border-bottom: 1px solid var(--border);
+    display: block !important;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out;
+  }
+
+  #collapsableContent[hidden] {
+    max-height: 0 !important;
+    padding: 0 1rem !important;
+    opacity: 0 !important;
+    border-bottom: none !important;
+    display: block !important;
+  }
+
+  /* Hamburger is visible on desktop */
+  .nav_toggle {
+    display: inline-flex;
+  }
+}
+
+/* ===============================
+   Topic Pills
+================================*/
+.topics-pills {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  justify-content: center;
+  padding: .5rem 0 1rem;
+}
+
+.pill {
+  text-decoration: none;
+  padding: .375rem .75rem;
+  border-radius: 9999px;
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  border: 1px solid var(--border);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pill:hover,
+.pill:focus {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ===============================
+   Search Bar
+================================*/
+.search_bar {
+  max-width: 1100px;
+  padding: 0 1rem;
+  margin: .25rem auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+#searchform {
+  display: flex;
+  flex-wrap: initial;
+  gap: .5rem;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 500px);
+}
+
+#searchInput {
+  flex: 1 1 680px;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  padding: .5rem .75rem;
+}
+
+.search_btn {
+  appearance: none;
+  border: 1px solid transparent;
+  padding: .625rem 1rem;
+  border-radius: .5rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--pill-bg);
+  color: var(--pill-text);
+}
+
+.search_btn:hover,
+.search_btn:focus {
+  background: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--border);
+}
+
+.help {
+  color: var(--muted);
+  font-size: .875rem;
+  text-align: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===============================
+   Country Selector
+================================*/
+.country-selector-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+}
+
+.country-selector-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.country-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 500px;
+  justify-content: center;
+}
+
+.country-label-text {
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.country-select {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  font-size: 1rem;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.country-select:hover,
+.country-select:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.country-status {
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.25rem;
+  padding: 0.25rem 0;
+}
+
+.country-status.info {
+  color: var(--accent);
+}
+
+.country-status.success {
+  color: #059669;
+}
+
+.country-status.warning {
+  color: #d97706;
+}
+
+.country-status.error {
+  color: #dc2626;
+}
+
+/* ===============================
+   Accessibility & Focus
+================================*/
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:target {
+  scroll-margin-top: 80px;
+}
