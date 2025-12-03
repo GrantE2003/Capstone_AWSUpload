@@ -4,6 +4,7 @@
   // Priority: window.API_BASE_URL (set by server) > hostname detection > fallback
   const API_BASE = (function() {
     // Check if server set a global API base URL (for production)
+    // This is injected by the backend server into the HTML
     if (window.API_BASE_URL) {
       return window.API_BASE_URL;
     }
@@ -16,6 +17,7 @@
     
     // Production: use same origin (backend and frontend on same domain)
     // This works for AWS deployments where frontend and backend are served together
+    // The backend should inject window.API_BASE_URL, but this is a fallback
     return window.location.origin;
   })();
 

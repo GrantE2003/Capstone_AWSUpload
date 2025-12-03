@@ -12,7 +12,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:4000',
   'http://127.0.0.1:3000',
-  process.env.FRONTEND_URL, // AWS production domain
+  'https://www.4970capstone-mss.com', // Production domain
+  'https://4970capstone-mss.com', // Production domain without www
+  process.env.FRONTEND_URL, // AWS production domain from env
   process.env.CORS_ORIGIN   // Additional allowed origin
 ].filter(Boolean); // Remove undefined values
 
@@ -21,6 +23,7 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
+    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -29,12 +32,16 @@ app.use(cors({
         console.warn(`[CORS] Allowing origin in dev mode: ${origin}`);
         callback(null, true);
       } else {
+        // Production: log blocked origin for debugging
         console.warn(`[CORS] Blocked origin: ${origin}`);
+        console.warn(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
         callback(new Error('Not allowed by CORS'));
       }
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
@@ -73,10 +80,15 @@ app.use((req, res, next) => {
         // Determine API base URL based on environment
         let apiBaseUrl;
         if (process.env.API_BASE_URL) {
+          // Explicit API base URL from environment
           apiBaseUrl = process.env.API_BASE_URL;
-        } else if (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) {
-          apiBaseUrl = process.env.FRONTEND_URL;
+        } else if (process.env.NODE_ENV === 'production') {
+          // Production: use same origin (backend and frontend on same domain)
+          // Use FRONTEND_URL if set, otherwise use request origin
+          apiBaseUrl = process.env.FRONTEND_URL || 
+                      (req.protocol + '://' + req.get('host'));
         } else {
+          // Development: use localhost
           apiBaseUrl = 'http://localhost:4000';
         }
         const script = `<script>window.API_BASE_URL = "${apiBaseUrl}";</script>`;
