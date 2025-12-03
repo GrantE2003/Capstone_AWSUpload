@@ -6,20 +6,27 @@
     // Check if server set a global API base URL (for production)
     // This is injected by the backend server into the HTML
     if (window.API_BASE_URL) {
+      console.log('[Article Loader] Using API_BASE_URL from server:', window.API_BASE_URL);
       return window.API_BASE_URL;
     }
     
     // Development: detect localhost
     if (window.location.hostname.includes("localhost") ||
         window.location.hostname.includes("127.0.0.1")) {
+      console.log('[Article Loader] Using localhost for development');
       return "http://localhost:4000";
     }
     
     // Production: use same origin (backend and frontend on same domain)
     // This works for AWS deployments where frontend and backend are served together
-    // The backend should inject window.API_BASE_URL, but this is a fallback
-    return window.location.origin;
+    const origin = window.location.origin;
+    console.log('[Article Loader] Using same origin (fallback):', origin);
+    console.warn('[Article Loader] WARNING: window.API_BASE_URL not set by server. Using fallback:', origin);
+    return origin;
   })();
+  
+  // Log the final API_BASE for debugging
+  console.log('[Article Loader] Final API_BASE:', API_BASE);
 
   // Map page names to API category IDs
   const pageToCategory = {
@@ -371,8 +378,24 @@
         }
       })
       .catch(error => {
-        console.error('Error loading articles:', error);
-        articlesContainer.innerHTML = '<div class="card"><p>Error loading articles. Please try again.</p></div>';
+        console.error('[Article Loader] Error loading articles:', error);
+        console.error('[Article Loader] API_BASE used:', API_BASE);
+        console.error('[Article Loader] Full error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        
+        // Show more detailed error message for debugging
+        let errorMessage = 'Error loading articles. Please try again.';
+        if (error.message) {
+          errorMessage += `<br><small>Error: ${error.message}</small>`;
+        }
+        if (API_BASE.includes('localhost')) {
+          errorMessage += '<br><small>Warning: Using localhost in production. Check API_BASE_URL configuration.</small>';
+        }
+        
+        articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
       });
   }
 

@@ -82,17 +82,23 @@ app.use((req, res, next) => {
         if (process.env.API_BASE_URL) {
           // Explicit API base URL from environment
           apiBaseUrl = process.env.API_BASE_URL;
+          console.log('[Server] Using API_BASE_URL from environment:', apiBaseUrl);
         } else if (process.env.NODE_ENV === 'production') {
           // Production: use same origin (backend and frontend on same domain)
           // Use FRONTEND_URL if set, otherwise use request origin
           apiBaseUrl = process.env.FRONTEND_URL || 
                       (req.protocol + '://' + req.get('host'));
+          console.log('[Server] Production mode - API base URL:', apiBaseUrl);
+          console.log('[Server] Request origin:', req.protocol + '://' + req.get('host'));
+          console.log('[Server] FRONTEND_URL env:', process.env.FRONTEND_URL);
         } else {
           // Development: use localhost
           apiBaseUrl = 'http://localhost:4000';
+          console.log('[Server] Development mode - API base URL:', apiBaseUrl);
         }
         const script = `<script>window.API_BASE_URL = "${apiBaseUrl}";</script>`;
         data = data.replace('</head>', script + '</head>');
+        console.log('[Server] Injected API_BASE_URL into HTML:', apiBaseUrl);
       }
       return originalSend.call(this, data);
     };
