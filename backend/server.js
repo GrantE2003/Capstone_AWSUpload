@@ -592,7 +592,7 @@ app.get('/api/guardian', async (req, res) => {
  */
 app.get('/api/news/aggregate', async (req, res) => {
   try {
-    const { category, country, page = 1, limit = 18, query, q } = req.query;
+    const { category, country, page = 2, limit = 18, query, q } = req.query;
 
     console.log('[AGGREGATE] Request received', {
       category,
