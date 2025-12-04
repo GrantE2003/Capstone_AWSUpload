@@ -1,24 +1,25 @@
 (function () {
   'use strict';
 
-  // ==========================
-  // API base URL (dev vs prod)
-  // ==========================
-  const API_BASE = (function () {
-    // Development: localhost
-    if (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1'
-    ) {
-      console.log('[Article Loader] Using localhost for development');
-      return 'http://localhost:4000';
-    }
+// ==========================
+// API base URL (dev vs prod)
+// ==========================
+const API_BASE = (function () {
+  // Development: localhost
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    console.log('[Article Loader] Using localhost for development');
+    return 'http://localhost:4000';
+  }
 
-    // Production: use SAME ORIGIN as the site (your AWS domain)
-    const origin = window.location.origin;
-    console.log('[Article Loader] Using same origin for production:', origin);
-    return origin;
-  })();
+  // Production: use Render backend
+  const renderUrl = 'https://capstone-awsupload.onrender.com';
+  console.log('[Article Loader] Using Render backend for production:', renderUrl);
+  return renderUrl;
+})();
+
 
   console.log('[Article Loader] Final API_BASE:', API_BASE);
 
