@@ -759,18 +759,25 @@ app.get('/api/guardian', async (req, res) => {
 // News aggregation endpoint (multi-source)
 // CRITICAL: This route must be /api/news/aggregate
 // Frontend calls: GET /api/news/aggregate?category=business&country=US
+// PRODUCTION URL: https://www.4970capstone-mss.com/api/news/aggregate?category=business&country=US
+console.log('[Server] Loading newsAggregate router...');
 const newsAggregateRouter = require('./routes/newsAggregate');
+console.log('[Server] Mounting newsAggregate router at /api/news');
 app.use('/api/news', newsAggregateRouter);
+console.log('[Server] ✓ Successfully mounted /api/news router');
+console.log('[Server] ✓ Route available at: GET /api/news/aggregate');
 
 // Log route registration for debugging
+console.log('[Server] ========================================');
 console.log('[Server] Registered API routes:');
-console.log('  GET /api/news/aggregate - News aggregation endpoint');
-console.log('  GET /api/health - Health check');
-console.log('  GET /api/topics - Topics list');
-console.log('  GET /api/search - Search endpoint');
-console.log('  GET /api/guardian - Guardian API proxy');
-console.log('  GET /api/section/:id - Section endpoint');
-console.log('  POST /api/summarize - Summarization endpoint');
+console.log('[Server]   GET /api/news/aggregate - News aggregation endpoint (CRITICAL)');
+console.log('[Server]   GET /api/health - Health check');
+console.log('[Server]   GET /api/topics - Topics list');
+console.log('[Server]   GET /api/search - Search endpoint');
+console.log('[Server]   GET /api/guardian - Guardian API proxy');
+console.log('[Server]   GET /api/section/:id - Section endpoint');
+console.log('[Server]   POST /api/summarize - Summarization endpoint');
+console.log('[Server] ========================================');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -1207,10 +1214,20 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
+  console.log(`========================================`);
   console.log(`Guardian API Proxy Server running on port ${PORT}`);
   console.log(`API Key configured: ${GUARDIAN_API_KEY ? 'Yes' : 'No (Mock Mode)'}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
-  console.log(`Available topics: http://localhost:${PORT}/api/topics`);
-  console.log(`Search: http://localhost:${PORT}/api/search?q=technology`);
-  console.log(`Section: http://localhost:${PORT}/api/section/technology`);
+  console.log(`========================================`);
+  console.log(`CRITICAL PRODUCTION ROUTE:`);
+  console.log(`  GET /api/news/aggregate`);
+  console.log(`  Production URL: https://www.4970capstone-mss.com/api/news/aggregate`);
+  console.log(`  Test URL: http://localhost:${PORT}/api/news/aggregate?category=business&country=US`);
+  console.log(`========================================`);
+  console.log(`Other available routes:`);
+  console.log(`  GET /api/health - Health check`);
+  console.log(`  GET /api/topics - Topics list`);
+  console.log(`  GET /api/search?q=technology - Search`);
+  console.log(`  GET /api/section/technology - Section`);
+  console.log(`  GET /api/news/test - Test route for news router`);
+  console.log(`========================================`);
 });

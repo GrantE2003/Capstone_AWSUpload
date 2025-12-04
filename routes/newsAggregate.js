@@ -7,6 +7,22 @@ const { fetchCurrentsArticles } = require('../services/currentsClient');
 const { groupSimilarArticles } = require('../services/articleGrouper');
 const { summarizeArticleGroup, generateNeutralTitle } = require('../services/llmSummarizer');
 
+// CRITICAL: Log router initialization
+console.log('[NewsAggregate Router] Router initialized');
+console.log('[NewsAggregate Router] Will register: GET /aggregate');
+console.log('[NewsAggregate Router] Full path will be: GET /api/news/aggregate');
+
+// Test route to verify router is mounted correctly
+// GET /api/news/test - Returns simple JSON to verify routing works
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'News aggregate router is working!',
+    path: '/api/news/test',
+    aggregateRoute: '/api/news/aggregate',
+    timestamp: new Date().toISOString()
+  });
+});
+
 /**
  * Aggregation endpoint that:
  * 1. Fetches articles from Guardian, GDELT, and Currents in parallel
@@ -14,7 +30,11 @@ const { summarizeArticleGroup, generateNeutralTitle } = require('../services/llm
  * 3. Groups similar articles
  * 4. Generates summaries and comparisons for each group
  * 
- * GET /api/news/aggregate?query=...&country=...&category=...
+ * CRITICAL PRODUCTION ROUTE:
+ * GET /api/news/aggregate?category=business&country=US
+ * 
+ * This route MUST exist exactly as /api/news/aggregate
+ * Frontend calls: https://www.4970capstone-mss.com/api/news/aggregate?category=business&country=US
  */
 router.get('/aggregate', async (req, res) => {
   try {
@@ -519,6 +539,15 @@ router.get('/aggregate', async (req, res) => {
     });
   }
 });
+
+// Log router export
+console.log('[NewsAggregate Router] Router exported successfully');
+console.log('[NewsAggregate Router] Routes registered:', router.stack.map(layer => {
+  if (layer.route) {
+    return `${Object.keys(layer.route.methods).join(', ').toUpperCase()} ${layer.route.path}`;
+  }
+  return null;
+}).filter(Boolean));
 
 module.exports = router;
 
