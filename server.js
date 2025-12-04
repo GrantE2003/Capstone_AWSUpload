@@ -45,6 +45,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Request logging middleware for API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[API Request] ${req.method} ${req.originalUrl}`);
+    console.log(`[API Request] Query:`, req.query);
+  }
+  next();
+});
+
 // Disable caching for HTML files to prevent stale content
 app.use((req, res, next) => {
   if (req.path.endsWith('.html')) {
@@ -55,61 +64,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from frontend directory
-app.use(express.static('frontend', {
-  setHeaders: (res, path) => {
-    // Inject API base URL into HTML files for frontend to use
-    if (path.endsWith('.html')) {
-      // Set API base URL based on environment
-      const apiBaseUrl = process.env.API_BASE_URL || 
-                        (process.env.NODE_ENV === 'production' 
-                          ? process.env.FRONTEND_URL || window?.location?.origin 
-                          : 'http://localhost:4000');
-      
-      // This will be injected via a middleware that processes HTML
-    }
-  }
-}));
-
-// Middleware to inject API base URL into HTML files
-app.use((req, res, next) => {
-  if (req.path.endsWith('.html') || req.path === '/') {
-    const originalSend = res.send;
-    res.send = function(data) {
-      if (typeof data === 'string' && data.includes('</head>')) {
-        // Determine API base URL based on environment
-        let apiBaseUrl;
-        if (process.env.API_BASE_URL) {
-          // Explicit API base URL from environment
-          apiBaseUrl = process.env.API_BASE_URL;
-          console.log('[Server] Using API_BASE_URL from environment:', apiBaseUrl);
-        } else if (process.env.NODE_ENV === 'production') {
-          // Production: use same origin (backend and frontend on same domain)
-          // Use FRONTEND_URL if set, otherwise use request origin
-          apiBaseUrl = process.env.FRONTEND_URL || 
-                      (req.protocol + '://' + req.get('host'));
-          console.log('[Server] Production mode - API base URL:', apiBaseUrl);
-          console.log('[Server] Request origin:', req.protocol + '://' + req.get('host'));
-          console.log('[Server] FRONTEND_URL env:', process.env.FRONTEND_URL);
-        } else {
-          // Development: use localhost
-          apiBaseUrl = 'http://localhost:4000';
-          console.log('[Server] Development mode - API base URL:', apiBaseUrl);
-        }
-        const script = `<script>window.API_BASE_URL = "${apiBaseUrl}";</script>`;
-        data = data.replace('</head>', script + '</head>');
-        console.log('[Server] Injected API_BASE_URL into HTML:', apiBaseUrl);
-      }
-      return originalSend.call(this, data);
-    };
-  }
-  next();
-});
-
-// Serve index.html as the root route
-app.get('/', (req, res) => {
-  res.sendFile('index.html', { root: 'frontend' });
-});
+// CRITICAL: API routes must be defined BEFORE static file serving
+// This ensures /api/* requests are handled by API routes, not static files
 
 // In-memory cache with TTL
 const cache = new Map();
@@ -801,8 +757,20 @@ app.get('/api/guardian', async (req, res) => {
 });
 
 // News aggregation endpoint (multi-source)
+// CRITICAL: This route must be /api/news/aggregate
+// Frontend calls: GET /api/news/aggregate?category=business&country=US
 const newsAggregateRouter = require('./routes/newsAggregate');
 app.use('/api/news', newsAggregateRouter);
+
+// Log route registration for debugging
+console.log('[Server] Registered API routes:');
+console.log('  GET /api/news/aggregate - News aggregation endpoint');
+console.log('  GET /api/health - Health check');
+console.log('  GET /api/topics - Topics list');
+console.log('  GET /api/search - Search endpoint');
+console.log('  GET /api/guardian - Guardian API proxy');
+console.log('  GET /api/section/:id - Section endpoint');
+console.log('  POST /api/summarize - Summarization endpoint');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -1140,6 +1108,70 @@ app.get('/debug/news', async (req, res) => {
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// CRITICAL: Static file serving must come AFTER API routes
+// This ensures /api/* requests are handled by API routes first
+// Only non-API requests will be served as static files
+
+// Middleware to inject API base URL into HTML files
+app.use((req, res, next) => {
+  if (req.path.endsWith('.html') || req.path === '/') {
+    const originalSend = res.send;
+    res.send = function(data) {
+      if (typeof data === 'string' && data.includes('</head>')) {
+        // Determine API base URL based on environment
+        let apiBaseUrl;
+        if (process.env.API_BASE_URL) {
+          // Explicit API base URL from environment
+          apiBaseUrl = process.env.API_BASE_URL;
+          console.log('[Server] Using API_BASE_URL from environment:', apiBaseUrl);
+        } else if (process.env.NODE_ENV === 'production') {
+          // Production: use same origin (backend and frontend on same domain)
+          // Use FRONTEND_URL if set, otherwise use request origin
+          apiBaseUrl = process.env.FRONTEND_URL || 
+                      (req.protocol + '://' + req.get('host'));
+          console.log('[Server] Production mode - API base URL:', apiBaseUrl);
+          console.log('[Server] Request origin:', req.protocol + '://' + req.get('host'));
+          console.log('[Server] FRONTEND_URL env:', process.env.FRONTEND_URL);
+        } else {
+          // Development: use localhost
+          apiBaseUrl = 'http://localhost:4000';
+          console.log('[Server] Development mode - API base URL:', apiBaseUrl);
+        }
+        const script = `<script>window.API_BASE_URL = "${apiBaseUrl}";</script>`;
+        data = data.replace('</head>', script + '</head>');
+        console.log('[Server] Injected API_BASE_URL into HTML:', apiBaseUrl);
+      }
+      return originalSend.call(this, data);
+    };
+  }
+  next();
+});
+
+// Serve static files from frontend directory (EXCLUDING /api/* paths)
+// CRITICAL: This must come AFTER all API routes are defined
+app.use((req, res, next) => {
+  // Skip static file serving for API routes - they should have been handled already
+  if (req.path.startsWith('/api/')) {
+    return next(); // Let 404 handler catch unmatched API routes
+  }
+  // For non-API routes, serve static files
+  next();
+}, express.static('frontend', {
+  setHeaders: (res, path) => {
+    // Set cache headers for HTML files
+    if (path.endsWith('.html')) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+    }
+  }
+}));
+
+// Serve index.html as the root route
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: 'frontend' });
 });
 
 // 404 handler for API routes - provide detailed error

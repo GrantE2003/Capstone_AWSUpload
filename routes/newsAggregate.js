@@ -18,6 +18,14 @@ const { summarizeArticleGroup, generateNeutralTitle } = require('../services/llm
  */
 router.get('/aggregate', async (req, res) => {
   try {
+    // Log incoming request for debugging
+    console.log('[Aggregate] ========================================');
+    console.log('[Aggregate] Incoming request to /api/news/aggregate');
+    console.log('[Aggregate] Method:', req.method);
+    console.log('[Aggregate] URL:', req.originalUrl);
+    console.log('[Aggregate] Query params:', req.query);
+    console.log('[Aggregate] ========================================');
+    
     const { query, country, category, page } = req.query;
     const pageNum = page ? parseInt(page, 10) : 1;
     const isSearch = query && query.trim().length > 0;
