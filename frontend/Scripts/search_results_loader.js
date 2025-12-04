@@ -4,18 +4,18 @@
   // Production: use same origin (backend and frontend on same domain)
   // Development: use localhost when running locally
   const API_BASE = (function() {
-    // Development: detect localhost
-    if (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1") {
-      console.log('[Search Results Loader] Using localhost for development');
+    if (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
+    ) {
+      console.log("[Search Results Loader] Using localhost for development");
       return "http://localhost:4000";
     }
-    
-    // Production: use same origin (backend and frontend on same domain)
-    // This works for AWS deployments where frontend and backend are served together
-    const origin = window.location.origin;
-    console.log('[Search Results Loader] Using same origin for production:', origin);
-    return origin;
+
+    // Production: Render backend URL (same as article_loader.js)
+    const renderUrl = "https://capstone-awsupload.onrender.com";
+    console.log("[Search Results Loader] Using Render backend for production:", renderUrl);
+    return renderUrl;
   })();
   
   // Log the final API_BASE for debugging
