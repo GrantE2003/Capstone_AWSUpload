@@ -35,9 +35,15 @@
   }
 
   // Build API URL for search
+  // CRITICAL: Use absolute URL with window.location.origin for production
   function buildSearchUrl(query, page = 1) {
     const countryCode = getCountryCode();
-    const url = new URL(`${API_BASE}/api/news/aggregate`);
+    
+    // Ensure API_BASE doesn't have trailing slash
+    const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+    
+    // Construct absolute URL
+    const url = new URL('/api/news/aggregate', base);
     
     url.searchParams.set('query', query);
     if (countryCode) {
@@ -47,7 +53,10 @@
       url.searchParams.set('page', page);
     }
 
-    return url.toString();
+    const finalUrl = url.toString();
+    console.log('[Search Results Loader] API_BASE:', API_BASE);
+    console.log('[Search Results Loader] Fetching from aggregate endpoint:', finalUrl);
+    return finalUrl;
   }
 
   // Create source dropdown for a story group
@@ -319,8 +328,9 @@
     fetch(apiUrl)
       .then(response => {
         console.log('[Search Results Loader] Response status:', response.status, response.statusText);
+        console.log('[Search Results Loader] Response URL:', response.url);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
+          throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`);
         }
         return response.json();
       })
@@ -373,10 +383,13 @@
       .catch(error => {
         console.error('[Search Results Loader] Error loading search results:', error);
         console.error('[Search Results Loader] API_BASE used:', API_BASE);
+        console.error('[Search Results Loader] Full URL attempted:', apiUrl);
         console.error('[Search Results Loader] Full error details:', {
           message: error.message,
           stack: error.stack,
-          name: error.name
+          name: error.name,
+          url: apiUrl,
+          origin: window.location.origin
         });
         
         // Show more detailed error message for debugging
@@ -384,6 +397,8 @@
         if (error.message) {
           errorMessage += `<br><small>Error: ${error.message}</small>`;
         }
+        errorMessage += `<br><small>URL: ${apiUrl}</small>`;
+        errorMessage += `<br><small>Origin: ${window.location.origin}</small>`;
         
         articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
       });
