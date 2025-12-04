@@ -1,22 +1,21 @@
 (function () {
 
-  // Base URL for backend (environment-aware configuration)
-  // Production: Render backend
+// Base URL for backend (environment-aware configuration)
+const API_BASE = (function () {
   // Development: localhost
-  const API_BASE = (function() {
-    if (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1"
-    ) {
-      console.log("[Search Results Loader] Using localhost for development");
-      return "http://localhost:4000";
-    }
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    console.log('[Search Results Loader] Using localhost for development');
+    return 'http://localhost:4000';
+  }
 
-    // Production: Render backend URL (same as article_loader.js)
-    const renderUrl = "https://capstone-awsupload.onrender.com";
-    console.log("[Search Results Loader] Using Render backend for production:", renderUrl);
-    return renderUrl;
-  })();
+  // Production: Render backend
+  const renderUrl = 'https://capstone-awsupload.onrender.com';
+  console.log('[Search Results Loader] Using Render backend for production:', renderUrl);
+  return renderUrl;
+})();
 
   // Log the final API_BASE for debugging
   console.log('[Search Results Loader] Final API_BASE:', API_BASE);
