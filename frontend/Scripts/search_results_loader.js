@@ -1,18 +1,12 @@
 (function () {
 
   // Base URL for backend (environment-aware configuration)
-  // Priority: window.API_BASE_URL (set by server) > hostname detection > fallback
+  // Production: use same origin (backend and frontend on same domain)
+  // Development: use localhost when running locally
   const API_BASE = (function() {
-    // Check if server set a global API base URL (for production)
-    // This is injected by the backend server into the HTML
-    if (window.API_BASE_URL) {
-      console.log('[Search Results Loader] Using API_BASE_URL from server:', window.API_BASE_URL);
-      return window.API_BASE_URL;
-    }
-    
     // Development: detect localhost
-    if (window.location.hostname.includes("localhost") ||
-        window.location.hostname.includes("127.0.0.1")) {
+    if (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1") {
       console.log('[Search Results Loader] Using localhost for development');
       return "http://localhost:4000";
     }
@@ -20,8 +14,7 @@
     // Production: use same origin (backend and frontend on same domain)
     // This works for AWS deployments where frontend and backend are served together
     const origin = window.location.origin;
-    console.log('[Search Results Loader] Using same origin (fallback):', origin);
-    console.warn('[Search Results Loader] WARNING: window.API_BASE_URL not set by server. Using fallback:', origin);
+    console.log('[Search Results Loader] Using same origin for production:', origin);
     return origin;
   })();
   
@@ -390,9 +383,6 @@
         let errorMessage = 'Error loading search results. Please try again.';
         if (error.message) {
           errorMessage += `<br><small>Error: ${error.message}</small>`;
-        }
-        if (API_BASE.includes('localhost')) {
-          errorMessage += '<br><small>Warning: Using localhost in production. Check API_BASE_URL configuration.</small>';
         }
         
         articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
