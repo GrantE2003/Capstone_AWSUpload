@@ -22,8 +22,6 @@
   // ==========================
   // Page → category mapping
   // ==========================
-  // These map your HTML filenames (without .html)
-  // to Guardian section IDs used by /api/news/aggregate
   const pageToCategory = {
     world_news: "world",
     united_states: "us-news",
@@ -36,20 +34,17 @@
     politics: "politics"
   };
 
-  // Get current page name from URL (e.g. "world_news" from "/Pages/world_news.html")
   function getCurrentPage() {
     const path = window.location.pathname;
     const filename = path.split("/").pop() || "index.html";
     return filename.replace(".html", "");
   }
 
-  // Get category ID for the current page
   function getCategoryId() {
     const page = getCurrentPage();
     return pageToCategory[page] || null;
   }
 
-  // Country from your LocationService widget
   function getCountryCode() {
     if (window.LocationService) {
       return window.LocationService.getSelectedCountry();
@@ -63,9 +58,7 @@
   function buildApiUrl(category, page = 1) {
     const countryCode = getCountryCode();
 
-    // Ensure API_BASE has no trailing slash
     const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
-
     const url = new URL("/api/news/aggregate", base);
 
     if (category) {
@@ -91,7 +84,6 @@
       return null;
     }
 
-    // Deduplicate so only ONE article per source (keep most recent)
     const sourceMap = new Map();
     group.articles.forEach((article) => {
       const sourceName = article.sourceName || article.source || "Unknown";
@@ -180,7 +172,6 @@
         : "▲";
     });
 
-    // Close when clicking outside
     document.addEventListener("click", function (e) {
       if (!dropdownContainer.contains(e.target)) {
         dropdownContent.style.display = "none";
@@ -196,39 +187,41 @@
   // Render a grouped story card
   // ==========================
   function renderStoryGroup(group, container) {
+    console.log("[Article Loader] Rendering group:", group);
+
     const groupDiv = document.createElement("div");
     groupDiv.className = "story-group-card";
     groupDiv.setAttribute("data-group-id", group.groupId || "");
 
-    // Title
+    const firstArticle = (group.articles && group.articles[0]) || {};
+
+    // --- ROBUST TITLE FALLBACK ---
+    const titleText =
+      group.groupTitle ||
+      firstArticle.title ||
+      "News Story";
+
     const titleEl = document.createElement("h3");
     titleEl.className = "story-title";
-    titleEl.textContent = group.groupTitle || "News Story";
+    titleEl.textContent = titleText;
     groupDiv.appendChild(titleEl);
 
-    // Summary
+    // --- ROBUST SUMMARY FALLBACK ---
     const summaryDiv = document.createElement("div");
     summaryDiv.className = "story-summary";
 
-    let fullSummary = group.summary;
-    if (!fullSummary || fullSummary.trim().length === 0) {
-      const summaryParts = [];
-      if (group.articles && group.articles.length > 0) {
-        group.articles.forEach((article) => {
-          if (article.description && article.description.trim().length > 20) {
-            const sentences = article.description
-              .split(/[.!?]+/)
-              .filter((s) => s.trim().length > 0);
-            if (sentences.length > 0) {
-              summaryParts.push(sentences[0].trim());
-            }
-          }
-        });
+    // Prefer backend summary; fall back to first article description, then title
+    let fullSummary = (group.summary || "").trim();
+    if (!fullSummary) {
+      const desc = (firstArticle.description || "").trim();
+      if (desc) {
+        fullSummary = desc;
+      } else if (firstArticle.title) {
+        fullSummary = `Summary not available. This story is about: ${firstArticle.title}`;
+      } else {
+        fullSummary =
+          "Multiple sources covered this story. Please review the articles below for details.";
       }
-      fullSummary =
-        summaryParts.length > 0
-          ? summaryParts.slice(0, 2).join(" ") + "."
-          : "Multiple sources covered this story. Please review the articles below for details.";
     }
 
     const summaryPreview =
@@ -275,7 +268,6 @@
 
     groupDiv.appendChild(summaryDiv);
 
-    // Source dropdown
     const sourceDropdown = createSourceDropdown(group);
     if (sourceDropdown) {
       groupDiv.appendChild(sourceDropdown);
