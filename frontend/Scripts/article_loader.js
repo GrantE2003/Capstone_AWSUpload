@@ -186,95 +186,103 @@
   // ==========================
   // Render a grouped story card
   // ==========================
-  function renderStoryGroup(group, container) {
-    console.log("[Article Loader] Rendering group:", group);
+function renderStoryGroup(group, container) {
+  console.log("[Article Loader] Rendering group:", group);
 
-    const groupDiv = document.createElement("div");
-    groupDiv.className = "story-group-card";
-    groupDiv.setAttribute("data-group-id", group.groupId || "");
+  const groupDiv = document.createElement("div");
+  groupDiv.className = "story-group-card";
+  groupDiv.setAttribute("data-group-id", group.groupId || "");
 
-    const firstArticle = (group.articles && group.articles[0]) || {};
+  // Use the first article as a fallback source of info
+  const firstArticle = (group.articles && group.articles[0]) || {};
 
-    // --- ROBUST TITLE FALLBACK ---
-    const titleText =
-      group.groupTitle ||
-      firstArticle.title ||
-      "News Story";
+  // --- TITLE (ALWAYS SHOW SOMETHING) ---
+  const titleText =
+    group.groupTitle ||             // preferred (from backend)
+    firstArticle.title ||           // fallback: first article title
+    "News Story";                   // ultimate fallback
 
-    const titleEl = document.createElement("h3");
-    titleEl.className = "story-title";
-    titleEl.textContent = titleText;
-    groupDiv.appendChild(titleEl);
+  const titleEl = document.createElement("h3");
+  titleEl.className = "story-title";
+  titleEl.textContent = titleText;
+  groupDiv.appendChild(titleEl);
 
-    // --- ROBUST SUMMARY FALLBACK ---
-    const summaryDiv = document.createElement("div");
-    summaryDiv.className = "story-summary";
+  // --- SUMMARY (ALWAYS SHOW SOMETHING) ---
+  const summaryDiv = document.createElement("div");
+  summaryDiv.className = "story-summary";
 
-    // Prefer backend summary; fall back to first article description, then title
-    let fullSummary = (group.summary || "").trim();
-    if (!fullSummary) {
-      const desc = (firstArticle.description || "").trim();
-      if (desc) {
-        fullSummary = desc;
-      } else if (firstArticle.title) {
-        fullSummary = `Summary not available. This story is about: ${firstArticle.title}`;
-      } else {
-        fullSummary =
-          "Multiple sources covered this story. Please review the articles below for details.";
-      }
+  // Preferred: backend summary
+  let fullSummary = (group.summary || "").trim();
+
+  if (!fullSummary) {
+    // Fallback: description from first article
+    const desc = (firstArticle.description || "").trim();
+
+    if (desc) {
+      fullSummary = desc;
+    } else if (firstArticle.title) {
+      // Extra fallback: generic line including the title
+      fullSummary = `Summary not available. This story is about: ${firstArticle.title}`;
+    } else {
+      // Last fallback if we truly have nothing
+      fullSummary =
+        "Multiple sources covered this story. Please review the articles below for details.";
     }
-
-    const summaryPreview =
-      fullSummary.length > 250
-        ? fullSummary.substring(0, 250) + "..."
-        : fullSummary;
-    const needsExpansion = fullSummary.length > 250;
-
-    const summaryText = document.createElement("p");
-    summaryText.className = "summary-text";
-    summaryText.textContent = needsExpansion ? summaryPreview : fullSummary;
-    summaryDiv.appendChild(summaryText);
-
-    if (needsExpansion) {
-      const readMoreLink = document.createElement("a");
-      readMoreLink.href = "#";
-      readMoreLink.className = "read-more-link";
-      readMoreLink.textContent = "Read more";
-
-      const readLessLink = document.createElement("a");
-      readLessLink.href = "#";
-      readLessLink.className = "read-less-link";
-      readLessLink.textContent = "Read less";
-      readLessLink.style.display = "none";
-
-      readMoreLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        summaryText.textContent = fullSummary;
-        readMoreLink.style.display = "none";
-        readLessLink.style.display = "inline";
-      });
-
-      readLessLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        summaryText.textContent = summaryPreview;
-        readLessLink.style.display = "none";
-        readMoreLink.style.display = "inline";
-        summaryDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
-
-      summaryDiv.appendChild(readMoreLink);
-      summaryDiv.appendChild(readLessLink);
-    }
-
-    groupDiv.appendChild(summaryDiv);
-
-    const sourceDropdown = createSourceDropdown(group);
-    if (sourceDropdown) {
-      groupDiv.appendChild(sourceDropdown);
-    }
-
-    container.appendChild(groupDiv);
   }
+
+  const summaryPreview =
+    fullSummary.length > 250
+      ? fullSummary.substring(0, 250) + "..."
+      : fullSummary;
+  const needsExpansion = fullSummary.length > 250;
+
+  const summaryText = document.createElement("p");
+  summaryText.className = "summary-text";
+  summaryText.textContent = needsExpansion ? summaryPreview : fullSummary;
+  summaryDiv.appendChild(summaryText);
+
+  if (needsExpansion) {
+    const readMoreLink = document.createElement("a");
+    readMoreLink.href = "#";
+    readMoreLink.className = "read-more-link";
+    readMoreLink.textContent = "Read more";
+
+    const readLessLink = document.createElement("a");
+    readLessLink.href = "#";
+    readLessLink.className = "read-less-link";
+    readLessLink.textContent = "Read less";
+    readLessLink.style.display = "none";
+
+    readMoreLink.addEventListener("click", function (e) {
+      e.preventDefault();
+      summaryText.textContent = fullSummary;
+      readMoreLink.style.display = "none";
+      readLessLink.style.display = "inline";
+    });
+
+    readLessLink.addEventListener("click", function (e) {
+      e.preventDefault();
+      summaryText.textContent = summaryPreview;
+      readLessLink.style.display = "none";
+      readMoreLink.style.display = "inline";
+      summaryDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    summaryDiv.appendChild(readMoreLink);
+    summaryDiv.appendChild(readLessLink);
+  }
+
+  groupDiv.appendChild(summaryDiv);
+
+  // Source dropdown (your existing function)
+  const sourceDropdown = createSourceDropdown(group);
+  if (sourceDropdown) {
+    groupDiv.appendChild(sourceDropdown);
+  }
+
+  container.appendChild(groupDiv);
+}
+
 
   // ==========================
   // Optional: raw article renderer (not used, but kept)
