@@ -1142,9 +1142,35 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// 404 handler
+// 404 handler for API routes - provide detailed error
+app.use('/api/*', (req, res) => {
+  console.error('[404] API route not found:', req.method, req.originalUrl);
+  console.error('[404] Available API routes: /api/health, /api/topics, /api/search, /api/guardian, /api/news/aggregate, /api/section/:id, /api/summarize');
+  res.status(404).json({ 
+    error: 'API endpoint not found',
+    method: req.method,
+    path: req.originalUrl,
+    availableRoutes: [
+      'GET /api/health',
+      'GET /api/topics',
+      'GET /api/search',
+      'GET /api/guardian',
+      'GET /api/news/aggregate',
+      'GET /api/section/:id',
+      'POST /api/summarize'
+    ]
+  });
+});
+
+// 404 handler for all other routes
 app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+  // Only return JSON for API-like requests, otherwise try to serve static file
+  if (req.path.startsWith('/api/')) {
+    res.status(404).json({ error: 'Endpoint not found', path: req.path });
+  } else {
+    // For non-API routes, try to serve from static files
+    res.status(404).send('Page not found');
+  }
 });
 
 // Start server

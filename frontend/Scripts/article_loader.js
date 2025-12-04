@@ -55,9 +55,15 @@
   }
 
   // Build API URL for aggregate endpoint
+  // CRITICAL: Use absolute URL with window.location.origin for production
   function buildApiUrl(category, page = 1) {
     const countryCode = getCountryCode();
-    const url = new URL(`${API_BASE}/api/news/aggregate`);
+    
+    // Ensure API_BASE doesn't have trailing slash
+    const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
+    
+    // Construct absolute URL
+    const url = new URL('/api/news/aggregate', base);
     
     if (category) {
       url.searchParams.set('category', category);
@@ -69,8 +75,10 @@
       url.searchParams.set('page', page);
     }
 
-    console.log('[Article Loader] Fetching from aggregate endpoint:', url.toString());
-    return url.toString();
+    const finalUrl = url.toString();
+    console.log('[Article Loader] API_BASE:', API_BASE);
+    console.log('[Article Loader] Fetching from aggregate endpoint:', finalUrl);
+    return finalUrl;
   }
 
   // Create source dropdown for a story group
@@ -317,10 +325,15 @@
       articlesContainer.innerHTML = '<div class="card"><p>Loading articles...</p></div>';
     }
 
-    fetch(buildApiUrl(category))
+    const apiUrl = buildApiUrl(category);
+    console.log('[Article Loader] Making fetch request to:', apiUrl);
+    
+    fetch(apiUrl)
       .then(response => {
+        console.log('[Article Loader] Response status:', response.status, response.statusText);
+        console.log('[Article Loader] Response URL:', response.url);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`);
         }
         return response.json();
       })
@@ -373,10 +386,13 @@
       .catch(error => {
         console.error('[Article Loader] Error loading articles:', error);
         console.error('[Article Loader] API_BASE used:', API_BASE);
+        console.error('[Article Loader] Full URL attempted:', apiUrl);
         console.error('[Article Loader] Full error details:', {
           message: error.message,
           stack: error.stack,
-          name: error.name
+          name: error.name,
+          url: apiUrl,
+          origin: window.location.origin
         });
         
         // Show more detailed error message for debugging
@@ -384,6 +400,8 @@
         if (error.message) {
           errorMessage += `<br><small>Error: ${error.message}</small>`;
         }
+        errorMessage += `<br><small>URL: ${apiUrl}</small>`;
+        errorMessage += `<br><small>Origin: ${window.location.origin}</small>`;
         
         articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
       });
