@@ -1,9 +1,8 @@
 (function () {
-
-  // Base URL for backend (environment-aware configuration)
-  // Development: localhost
-  // Production: your Render backend
-  const API_BASE = (function() {
+  // ==========================
+  // API base URL (dev vs prod)
+  // ==========================
+  const API_BASE = (function () {
     if (
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1"
@@ -18,35 +17,39 @@
     return renderUrl;
   })();
 
-  // Log the final API_BASE for debugging
   console.log("[Article Loader] Final API_BASE:", API_BASE);
 
-  // Map page names to API category IDs (Guardian / aggregate-friendly)
+  // ==========================
+  // Page → category mapping
+  // ==========================
+  // These map your HTML filenames (without .html)
+  // to Guardian section IDs used by /api/news/aggregate
   const pageToCategory = {
     world_news: "world",
-    united_states: "us-news",     // <-- was 'us'
+    united_states: "us-news",
     business: "business",
     technology: "technology",
-    sports: "sport",              // <-- was 'sports'
-    entertainment: "culture",     // <-- was 'entertainment'
+    sports: "sport",
+    entertainment: "culture",
     science: "science",
     health: "health",
     politics: "politics"
   };
 
-  // Get current page name from URL
+  // Get current page name from URL (e.g. "world_news" from "/Pages/world_news.html")
   function getCurrentPage() {
     const path = window.location.pathname;
     const filename = path.split("/").pop() || "index.html";
     return filename.replace(".html", "");
   }
 
-  // Get category ID for current page
+  // Get category ID for the current page
   function getCategoryId() {
     const page = getCurrentPage();
     return pageToCategory[page] || null;
   }
 
+  // Country from your LocationService widget
   function getCountryCode() {
     if (window.LocationService) {
       return window.LocationService.getSelectedCountry();
@@ -54,17 +57,17 @@
     return null;
   }
 
-  // Build API URL for aggregate endpoint
-  // CRITICAL: Use absolute URL with window.location.origin for production
+  // ==========================
+  // Build aggregate API URL
+  // ==========================
   function buildApiUrl(category, page = 1) {
     const countryCode = getCountryCode();
-    
-    // Ensure API_BASE doesn't have trailing slash
-    const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
-    
-    // Construct absolute URL
-    const url = new URL('/api/news/aggregate', base);
-    
+
+    // Ensure API_BASE has no trailing slash
+    const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+
+    const url = new URL("/api/news/aggregate", base);
+
     if (category) {
       url.searchParams.set("category", category);
     }
@@ -76,18 +79,19 @@
     }
 
     const finalUrl = url.toString();
-    console.log('[Article Loader] API_BASE:', API_BASE);
-    console.log('[Article Loader] Fetching from aggregate endpoint:', finalUrl);
+    console.log("[Article Loader] Fetching from aggregate endpoint:", finalUrl);
     return finalUrl;
   }
 
-  // Create source dropdown for a story group
+  // ==========================
+  // Source dropdown (one per group)
+  // ==========================
   function createSourceDropdown(group) {
     if (!group.articles || group.articles.length === 0) {
       return null;
     }
 
-    // Ensure only ONE article per source (keep most recent)
+    // Deduplicate so only ONE article per source (keep most recent)
     const sourceMap = new Map();
     group.articles.forEach((article) => {
       const sourceName = article.sourceName || article.source || "Unknown";
@@ -108,7 +112,7 @@
             sourceMap.set(sourceName, article);
           }
         } catch (e) {
-          // ignore bad dates
+          // ignore date parse issues
         }
       }
     });
@@ -170,12 +174,13 @@
       e.stopPropagation();
       const isExpanded = dropdownButton.getAttribute("aria-expanded") === "true";
       dropdownContent.style.display = isExpanded ? "none" : "block";
-      dropdownButton.setAttribute("aria-expanded", !isExpanded);
+      dropdownButton.setAttribute("aria-expanded", String(!isExpanded));
       dropdownButton.querySelector(".dropdown-arrow").textContent = isExpanded
         ? "▼"
         : "▲";
     });
 
+    // Close when clicking outside
     document.addEventListener("click", function (e) {
       if (!dropdownContainer.contains(e.target)) {
         dropdownContent.style.display = "none";
@@ -187,17 +192,21 @@
     return dropdownContainer;
   }
 
-  // Render a story group with its summary and sources dropdown
+  // ==========================
+  // Render a grouped story card
+  // ==========================
   function renderStoryGroup(group, container) {
     const groupDiv = document.createElement("div");
     groupDiv.className = "story-group-card";
-    groupDiv.setAttribute("data-group-id", group.groupId);
+    groupDiv.setAttribute("data-group-id", group.groupId || "");
 
+    // Title
     const titleEl = document.createElement("h3");
     titleEl.className = "story-title";
     titleEl.textContent = group.groupTitle || "News Story";
     groupDiv.appendChild(titleEl);
 
+    // Summary
     const summaryDiv = document.createElement("div");
     summaryDiv.className = "story-summary";
 
@@ -266,6 +275,7 @@
 
     groupDiv.appendChild(summaryDiv);
 
+    // Source dropdown
     const sourceDropdown = createSourceDropdown(group);
     if (sourceDropdown) {
       groupDiv.appendChild(sourceDropdown);
@@ -274,7 +284,9 @@
     container.appendChild(groupDiv);
   }
 
-  // (Kept for future use, but not used now)
+  // ==========================
+  // Optional: raw article renderer (not used, but kept)
+  // ==========================
   function renderRawArticle(article, container) {
     const articleDiv = document.createElement("div");
     articleDiv.className = "story-group";
@@ -309,10 +321,15 @@
     container.appendChild(articleDiv);
   }
 
-  // Load articles from aggregate endpoint
+  // ==========================
+  // Load grouped stories
+  // ==========================
   function loadArticles() {
     const category = getCategoryId();
-    if (!category) return;
+    if (!category) {
+      console.log("[Article Loader] No category for this page; skipping load.");
+      return;
+    }
 
     const main = document.querySelector("main");
     if (!main) return;
@@ -329,10 +346,14 @@
         '<div class="card"><p>Loading articles...</p></div>';
     }
 
-    fetch(buildApiUrl(category))
-      .then(response => {
+    const url = buildApiUrl(category);
+
+    fetch(url)
+      .then((response) => {
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`);
+          throw new Error(
+            `HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`
+          );
         }
         return response.json();
       })
@@ -340,7 +361,6 @@
         console.log("[Article Loader] Received data:", {
           groupedArticles: data.groupedArticles?.length || 0,
           rawArticles: data.rawArticles?.length || 0,
-          articles: data.articles?.length || 0,
           fallbackMode: data.fallbackMode || false
         });
 
@@ -381,35 +401,29 @@
           articlesContainer.appendChild(warningsDiv);
         }
       })
-      .catch(error => {
-        console.error('[Article Loader] Error loading articles:', error);
-        console.error('[Article Loader] API_BASE used:', API_BASE);
-        console.error('[Article Loader] Full error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        
-        // Show more detailed error message for debugging
-        let errorMessage = 'Error loading articles. Please try again.';
+      .catch((error) => {
+        console.error("[Article Loader] Error loading articles:", error);
+        console.error("[Article Loader] API_BASE used:", API_BASE);
+
+        let errorMessage = "Error loading articles. Please try again.";
         if (error.message) {
-          errorMessage += `<br><small>Error: ${error.message}</small>`;
+          errorMessage += `<br><small>${error.message}</small>`;
         }
-        
+
         articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
       });
   }
 
-  // Listen for country changes
+  // ==========================
+  // Country changes + initial load
+  // ==========================
   document.addEventListener("countryChanged", () => {
     loadArticles();
   });
 
-  // Load articles on page load
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", loadArticles);
   } else {
     loadArticles();
   }
-
 })();
