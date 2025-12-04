@@ -586,22 +586,23 @@ app.get('/api/guardian', async (req, res) => {
 });
 
 /**
- * NEW: Aggregate endpoint for grouped stories
+ * UPDATED: Aggregate endpoint for grouped stories
+ * Supports: category, query, q, country, page, limit
  * Returns: { groupedArticles: [...], rawArticles: [...], warnings: [...], pagination: {...} }
  */
 app.get('/api/news/aggregate', async (req, res) => {
   try {
-    const { category, country, page = 1, limit = 12 } = req.query;
+    const { category, country, page = 1, limit = 12, query, q } = req.query;
 
     console.log('[AGGREGATE] Request received', {
       category,
       country,
       page,
-      limit
+      limit,
+      query: query || q || ''
     });
 
     if (MOCK_MODE) {
-      // Simple mock grouping: one group per mock article
       const articles = mockData.articles.slice(0, limit);
       const grouped = articles.map((a, idx) => ({
         groupId: a.id || `mock-${idx}`,
@@ -632,7 +633,7 @@ app.get('/api/news/aggregate', async (req, res) => {
       });
     }
 
-    // Build Guardian API params (similar to /api/section)
+    // Build Guardian API params
     const params = {
       'api-key': GUARDIAN_API_KEY,
       'show-fields': 'trailText,bodyText',
@@ -642,14 +643,22 @@ app.get('/api/news/aggregate', async (req, res) => {
       'order-by': 'newest'
     };
 
+    // Section / category (for topic pages)
     if (category) {
       params.section = category;
     }
 
+    // Build search query from query/q + country
+    let searchQuery = query || q || '';
+
     if (country) {
       clearCacheForCountry(country);
-      const countryQuery = buildQueryWithCountry('', country);
-      if (countryQuery) params.q = countryQuery;
+      searchQuery = buildQueryWithCountry(searchQuery, country);
+      console.log('[AGGREGATE] Built query with country:', searchQuery);
+    }
+
+    if (searchQuery) {
+      params.q = searchQuery;
     }
 
     console.log('[AGGREGATE] Guardian API call', {
@@ -670,6 +679,7 @@ app.get('/api/news/aggregate', async (req, res) => {
       console.log('[AGGREGATE] Sample articles:', articles.slice(0, 3).map(a => a.webTitle));
     }
 
+    // Optional content-based country filtering
     const includeInternational = req.query.includeInternational === 'true';
     const originalCount = articles.length;
 
@@ -707,7 +717,7 @@ app.get('/api/news/aggregate', async (req, res) => {
       return 'Summary not available. Please read the article for details.';
     }
 
-    // Simple grouping: each article = one group
+    // Simple grouping: each article = one group (matches your frontend expectations)
     const groupedArticles = articles.map((a, idx) => ({
       groupId: a.id || `guardian-${idx}`,
       groupTitle: a.webTitle,
