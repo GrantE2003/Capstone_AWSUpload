@@ -13,11 +13,11 @@
  * Normalizes text for comparison (lowercase, remove punctuation, trim)
  */
 function normalizeText(text) {
-  if (!text) return '';
+  if (!text) return "";
   return text
     .toLowerCase()
-    .replace(/[^\w\s]/g, ' ') // Remove punctuation
-    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/[^\w\s]/g, " ") // Remove punctuation
+    .replace(/\s+/g, " ") // Normalize whitespace
     .trim();
 }
 
@@ -27,22 +27,75 @@ function normalizeText(text) {
  */
 function extractKeyTerms(text, maxTerms = 30) {
   if (!text || text.trim().length === 0) return [];
-  
+
   const normalized = normalizeText(text);
-  
+
   // Filter out common stop words that don't help with matching
-  const stopWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'a', 'an', 'its', 'it', 'they', 'them', 'their', 'there', 'then', 'than', 'said', 'says', 'new', 'news']);
-  
-  const words = normalized.split(/\s+/).filter(word => {
+  const stopWords = new Set([
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "can",
+    "this",
+    "that",
+    "these",
+    "those",
+    "a",
+    "an",
+    "its",
+    "it",
+    "they",
+    "them",
+    "their",
+    "there",
+    "then",
+    "than",
+    "said",
+    "says",
+    "new",
+    "news",
+  ]);
+
+  const words = normalized.split(/\s+/).filter((word) => {
     return word.length > 2 && !stopWords.has(word); // Reduced min length to 2 for better matching
   });
-  
+
   const wordCounts = {};
-  
-  words.forEach(word => {
+
+  words.forEach((word) => {
     wordCounts[word] = (wordCounts[word] || 0) + 1;
   });
-  
+
   // Sort by frequency and take top terms
   // Increased maxTerms to 30 for better matching across sources
   return Object.entries(wordCounts)
@@ -58,10 +111,10 @@ function extractKeyTerms(text, maxTerms = 30) {
 function jaccardSimilarity(set1, set2) {
   if (set1.size === 0 && set2.size === 0) return 1;
   if (set1.size === 0 || set2.size === 0) return 0;
-  
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
+
+  const intersection = new Set([...set1].filter((x) => set2.has(x)));
   const union = new Set([...set1, ...set2]);
-  
+
   return intersection.size / union.size;
 }
 
@@ -73,19 +126,19 @@ function jaccardSimilarity(set1, set2) {
 function calculateSimilarity(article1, article2) {
   // Extract key terms from title and description
   // Use both title and description for better matching
-  const text1 = `${article1.title || ''} ${article1.description || ''}`.trim();
-  const text2 = `${article2.title || ''} ${article2.description || ''}`.trim();
-  
+  const text1 = `${article1.title || ""} ${article1.description || ""}`.trim();
+  const text2 = `${article2.title || ""} ${article2.description || ""}`.trim();
+
   if (!text1 || !text2) {
     return 0; // Can't compare if either is empty
   }
-  
+
   const terms1 = new Set(extractKeyTerms(text1, 40)); // Increased term count for better matching
   const terms2 = new Set(extractKeyTerms(text2, 40));
-  
+
   // Calculate Jaccard similarity
   let textSimilarity = jaccardSimilarity(terms1, terms2);
-  
+
   // CRITICAL: Boost similarity if titles share significant overlap
   // This is the most important signal for cross-source matching
   if (article1.title && article2.title) {
@@ -94,130 +147,114 @@ function calculateSimilarity(article1, article2) {
     const titleTerms1 = new Set(extractKeyTerms(title1, 20));
     const titleTerms2 = new Set(extractKeyTerms(title2, 20));
     const titleSimilarity = jaccardSimilarity(titleTerms1, titleTerms2);
-    
+
     // CRITICAL: Title similarity is the PRIMARY signal for grouping
-    // Use STRICT matching - only group if titles are clearly about the same story
-    // This prevents unrelated stories from being grouped together
-    if (titleSimilarity > 0.20) {
+    if (titleSimilarity > 0.2) {
       // Weight title similarity very heavily (95%) since it's the strongest signal
-      textSimilarity = Math.max(textSimilarity, titleSimilarity * 0.95 + textSimilarity * 0.05);
+      textSimilarity = Math.max(
+        textSimilarity,
+        titleSimilarity * 0.95 + textSimilarity * 0.05
+      );
     }
-    
+
     // Additional boost: check for shared important words in titles
-    // Only boost if there are 3+ shared significant words (stricter requirement)
-    const title1Words = new Set(title1.split(/\s+/).filter(w => w.length > 3));
-    const title2Words = new Set(title2.split(/\s+/).filter(w => w.length > 3));
-    const sharedTitleWords = [...title1Words].filter(w => title2Words.has(w));
+    const title1Words = new Set(title1.split(/\s+/).filter((w) => w.length > 3));
+    const title2Words = new Set(title2.split(/\s+/).filter((w) => w.length > 3));
+    const sharedTitleWords = [...title1Words].filter((w) => title2Words.has(w));
     if (sharedTitleWords.length >= 3) {
-      // If titles share 3+ significant words, boost similarity
       textSimilarity = Math.min(1, textSimilarity + 0.1);
     }
   }
-  
+
   // Check publish time proximity (within 7 days = bonus)
-  // Articles published within the same time window are more likely to be about the same story
   let timeBonus = 0;
   if (article1.publishedAt && article2.publishedAt) {
     try {
       const date1 = new Date(article1.publishedAt);
       const date2 = new Date(article2.publishedAt);
       const daysDiff = Math.abs(date1 - date2) / (1000 * 60 * 60 * 24);
-      
+
       if (daysDiff <= 7) {
-        timeBonus = 0.15; // Increased bonus for articles published close together
+        timeBonus = 0.15;
       } else if (daysDiff <= 14) {
-        timeBonus = 0.05; // Smaller bonus for articles within 2 weeks
+        timeBonus = 0.05;
       }
     } catch (e) {
-      // Invalid date, ignore
+      // ignore
     }
   }
-  
+
   // Check URL domain similarity (same domain = bonus)
   let urlBonus = 0;
   try {
     const url1 = new URL(article1.url);
     const url2 = new URL(article2.url);
     if (url1.hostname === url2.hostname) {
-      urlBonus = 0.05; // Small bonus for same domain
+      urlBonus = 0.05;
     }
   } catch (e) {
-    // Invalid URL, ignore
+    // ignore
   }
-  
+
   // Combined similarity score
-  // CRITICAL: Use STRICT matching - title similarity is the primary signal
-  // Text similarity is most important (95%), time proximity helps slightly (5%)
-  // URL similarity is ignored to prevent false matches
-  // This ensures only clearly related articles are grouped together
-  const combinedScore = (textSimilarity * 0.95) + (timeBonus * 0.05);
+  const combinedScore = textSimilarity * 0.95 + timeBonus * 0.05;
   return Math.min(1, combinedScore);
 }
 
 /**
  * Groups similar articles together ACROSS ALL SOURCES
- * 
- * IMPORTANT: This function groups articles from ALL sources together in a single pool.
- * It does NOT group by source first - it compares articles from Guardian, GDELT, and Currents
- * together to find stories that are covered by multiple sources.
- * 
- * The grouping algorithm:
- * 1. Takes all articles from all sources as one combined array
- * 2. Compares each article against all existing groups (regardless of source)
- * 3. Groups articles that are about the same story, even if they come from different sources
- * 
- * Result: If Guardian, GDELT, and Currents all cover the same event, they will be
- * grouped together in a single group with one combined summary.
- * 
+ *
  * @param {Array<NormalizedArticle>} articles - Array of normalized articles from ALL sources
  * @param {number} similarityThreshold - Minimum similarity to group (0-1), default 0.3
  * @returns {Array<ArticleGroup>}
  */
 function groupSimilarArticles(articles, similarityThreshold = 0.3) {
   if (!articles || articles.length === 0) {
-    console.log('[ArticleGrouper] No articles provided');
+    console.log("[ArticleGrouper] No articles provided");
     return [];
   }
 
-  console.log(`[ArticleGrouper] Starting grouping with ${articles.length} articles, threshold: ${similarityThreshold}`);
-  
+  console.log(
+    `[ArticleGrouper] Starting grouping with ${articles.length} articles, threshold: ${similarityThreshold}`
+  );
+
   // Log source distribution
   const sourceCounts = {};
-  articles.forEach(a => {
-    const source = a.source || a.sourceName || 'unknown';
+  articles.forEach((a) => {
+    const source = a.source || a.sourceName || "unknown";
     sourceCounts[source] = (sourceCounts[source] || 0) + 1;
   });
-  console.log('[ArticleGrouper] Source distribution:', sourceCounts);
+  console.log("[ArticleGrouper] Source distribution:", sourceCounts);
 
-  // CRITICAL: Use a more aggressive clustering approach
-  // Instead of two-phase, use a single-phase approach that prioritizes cross-source matching
   const groups = [];
   const used = new Set();
 
-  // Sort articles by source to help with cross-source matching
-  // This ensures we try to match articles from different sources first
+  // Sort articles by source (optional, but deterministic)
   const sortedArticles = [...articles].sort((a, b) => {
-    const sourceA = (a.source || a.sourceName || '').toLowerCase();
-    const sourceB = (b.source || b.sourceName || '').toLowerCase();
+    const sourceA = (a.source || a.sourceName || "").toLowerCase();
+    const sourceB = (b.source || b.sourceName || "").toLowerCase();
     return sourceA.localeCompare(sourceB);
   });
 
-  // Phase 1: Create initial groups with cross-source priority
+  // Phase 1: assign articles to groups
   for (let i = 0; i < sortedArticles.length; i++) {
     if (used.has(i)) continue;
 
     const article = sortedArticles[i];
-    const articleSource = (article.source || article.sourceName || 'unknown').toLowerCase();
+    const articleSource = (article.source || article.sourceName || "unknown").toLowerCase();
+
     let bestGroup = null;
     let bestSimilarity = 0;
     let bestGroupHasDifferentSource = false;
 
-    // First pass: Try to find groups with DIFFERENT sources (cross-source matching)
     for (const group of groups) {
-      const groupSources = new Set(group.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
+      const groupSources = new Set(
+        group.articles.map((a) =>
+          (a.source || a.sourceName || "unknown").toLowerCase()
+        )
+      );
       const hasDifferentSource = !groupSources.has(articleSource);
-      
-      // Compare with ALL articles in the group to find best match
+
       let maxSimilarity = 0;
       for (const groupArticle of group.articles) {
         const similarity = calculateSimilarity(article, groupArticle);
@@ -225,19 +262,15 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
           maxSimilarity = similarity;
         }
       }
-      
-      // Use strict threshold - only group if clearly the same story
-      // DO NOT lower threshold here - we want strict matching to prevent over-merging
+
       if (maxSimilarity >= similarityThreshold) {
         if (hasDifferentSource) {
-          // Cross-source match - prioritize this
           if (maxSimilarity > bestSimilarity || !bestGroupHasDifferentSource) {
             bestGroup = group;
             bestSimilarity = maxSimilarity;
             bestGroupHasDifferentSource = true;
           }
         } else if (!bestGroupHasDifferentSource && maxSimilarity > bestSimilarity) {
-          // Same-source match, but only if we haven't found a cross-source match
           bestGroup = group;
           bestSimilarity = maxSimilarity;
         }
@@ -245,174 +278,168 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
     }
 
     if (bestGroup) {
-      // Add to existing group
       bestGroup.articles.push(article);
-      used.add(i);
     } else {
-      // Create new group
       const groupId = `group-${groups.length + 1}`;
-      groups.push({
-        groupId,
-        articles: [article]
-      });
-      used.add(i);
+      groups.push({ groupId, articles: [article] });
     }
+
+    used.add(i);
   }
-  
-  console.log(`[ArticleGrouper] Phase 1 complete: ${groups.length} initial groups created`);
-  
-  // Phase 2: Aggressive merging of groups from different sources
-  // This is the key to multi-source grouping
+
+  console.log(
+    `[ArticleGrouper] Phase 1 complete: ${groups.length} initial groups created`
+  );
+
+  // Phase 2: merge groups that clearly refer to the same story
   const mergedGroups = [];
   const merged = new Set();
   let mergeCount = 0;
-  
-  // Use a VERY STRICT merge threshold to prevent over-merging unrelated stories
-  // Only merge groups if they are clearly about the same story
-  // Use 95% of similarity threshold to ensure only very similar groups merge
-  const mergeThreshold = similarityThreshold * 0.95; // Very high threshold to prevent over-merging
-  
+  const mergeThreshold = similarityThreshold * 0.95;
+
   for (let i = 0; i < groups.length; i++) {
     if (merged.has(i)) continue;
-    
+
     const currentGroup = groups[i];
-    const currentSources = new Set(currentGroup.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
-    let mergedGroup = { 
+    const currentSources = new Set(
+      currentGroup.articles.map((a) =>
+        (a.source || a.sourceName || "unknown").toLowerCase()
+      )
+    );
+    const mergedGroup = {
       groupId: currentGroup.groupId,
-      articles: [...currentGroup.articles] 
+      articles: [...currentGroup.articles],
     };
-    
-    // Try to merge with other groups that have different sources
+
     for (let j = i + 1; j < groups.length; j++) {
       if (merged.has(j)) continue;
-      
       const otherGroup = groups[j];
-      const otherSources = new Set(otherGroup.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
-      
-      // Check if groups have different sources (no overlap)
-      const hasDifferentSources = [...currentSources].every(s => !otherSources.has(s));
-      
-      if (hasDifferentSources) {
-        // Compare ALL articles between groups to find best similarity
-        let maxSimilarity = 0;
-        for (const currentArticle of currentGroup.articles) {
-          for (const otherArticle of otherGroup.articles) {
-            const similarity = calculateSimilarity(currentArticle, otherArticle);
-            if (similarity > maxSimilarity) {
-              maxSimilarity = similarity;
-            }
-          }
-        }
-        
-        // If similar enough, merge the groups
-        if (maxSimilarity >= mergeThreshold) {
-          console.log(`[ArticleGrouper] Merging groups ${i+1} and ${j+1}: similarity ${maxSimilarity.toFixed(3)} >= ${mergeThreshold.toFixed(3)}`);
-          mergedGroup.articles.push(...otherGroup.articles);
-          merged.add(j);
-          mergeCount++;
-          // Update sources after merge
-          otherGroup.articles.forEach(a => {
-            const src = (a.source || a.sourceName || 'unknown').toLowerCase();
-            currentSources.add(src);
-          });
+      const otherSources = new Set(
+        otherGroup.articles.map((a) =>
+          (a.source || a.sourceName || "unknown").toLowerCase()
+        )
+      );
+
+      const hasDifferentSources = [...currentSources].every(
+        (s) => !otherSources.has(s)
+      );
+
+      if (!hasDifferentSources) continue;
+
+      let maxSimilarity = 0;
+      for (const a1 of currentGroup.articles) {
+        for (const a2 of otherGroup.articles) {
+          const similarity = calculateSimilarity(a1, a2);
+          if (similarity > maxSimilarity) maxSimilarity = similarity;
         }
       }
+
+      if (maxSimilarity >= mergeThreshold) {
+        console.log(
+          `[ArticleGrouper] Merging groups ${i + 1} and ${j + 1}: similarity ${maxSimilarity.toFixed(
+            3
+          )} >= ${mergeThreshold.toFixed(3)}`
+        );
+        mergedGroup.articles.push(...otherGroup.articles);
+        merged.add(j);
+        mergeCount++;
+
+        otherGroup.articles.forEach((a) => {
+          const src = (a.source || a.sourceName || "unknown").toLowerCase();
+          currentSources.add(src);
+        });
+      }
     }
-    
+
     mergedGroups.push(mergedGroup);
     merged.add(i);
   }
-  
-  console.log(`[ArticleGrouper] Phase 2 complete: ${mergedGroups.length} merged groups (${mergeCount} merges performed)`);
-  
-  // Continue with deduplication on merged groups
-  // Use mergedGroups for deduplication
 
-  // CRITICAL: Deduplicate sources within each group
-  // Each group should have ONLY ONE article per source
-  // If multiple articles from the same source are in a group, keep only the most recent one
-  const deduplicatedGroups = mergedGroups.map(group => {
+  console.log(
+    `[ArticleGrouper] Phase 2 complete: ${mergedGroups.length} merged groups (${mergeCount} merges performed)`
+  );
+
+  // Deduplicate sources in each group (keep most recent per source)
+  const deduplicatedGroups = mergedGroups.map((group) => {
     const sourceMap = new Map(); // source -> article
-    
-    // For each article in the group, keep only the most recent one per source
-    group.articles.forEach(article => {
-      const source = article.source || article.sourceName || 'unknown';
+
+    group.articles.forEach((article) => {
+      const source = article.source || article.sourceName || "unknown";
       const existing = sourceMap.get(source);
-      
+
       if (!existing) {
-        // First article from this source, keep it
         sourceMap.set(source, article);
       } else {
-        // We already have an article from this source, compare dates
         try {
-          const existingDate = existing.publishedAt ? new Date(existing.publishedAt).getTime() : 0;
-          const currentDate = article.publishedAt ? new Date(article.publishedAt).getTime() : 0;
-          
-          // Keep the more recent article
+          const existingDate = existing.publishedAt
+            ? new Date(existing.publishedAt).getTime()
+            : 0;
+          const currentDate = article.publishedAt
+            ? new Date(article.publishedAt).getTime()
+            : 0;
           if (currentDate > existingDate && currentDate > 0) {
             sourceMap.set(source, article);
           }
-          // If dates are equal or invalid, keep the first one (existing)
         } catch (e) {
-          // Invalid date, keep existing
+          // ignore
         }
       }
     });
-    
-    // Return group with deduplicated articles
+
     return {
       groupId: group.groupId,
-      articles: Array.from(sourceMap.values())
+      articles: Array.from(sourceMap.values()),
     };
   });
-  
-  // CRITICAL: Separate multi-source and single-source groups
-  // Prefer multi-source groups, but allow single-source as fallback if needed
-  const multiSourceGroupsFinal = deduplicatedGroups.filter(group => {
-    const uniqueSources = new Set(group.articles.map(a => {
-      const source = a.source || a.sourceName || 'unknown';
-      return source.toLowerCase().trim();
-    }));
-    return uniqueSources.size >= 2; // MUST have at least 2 different sources
+
+  // Separate multi-source and single-source groups
+  const multiSourceGroupsFinal = deduplicatedGroups.filter((group) => {
+    const uniqueSources = new Set(
+      group.articles.map((a) =>
+        (a.source || a.sourceName || "unknown").toLowerCase().trim()
+      )
+    );
+    return uniqueSources.size >= 2;
   });
-  
-  const singleSourceGroupsFinal = deduplicatedGroups.filter(group => {
-    const uniqueSources = new Set(group.articles.map(a => {
-      const source = a.source || a.sourceName || 'unknown';
-      return source.toLowerCase().trim();
-    }));
+
+  const singleSourceGroupsFinal = deduplicatedGroups.filter((group) => {
+    const uniqueSources = new Set(
+      group.articles.map((a) =>
+        (a.source || a.sourceName || "unknown").toLowerCase().trim()
+      )
+    );
     return uniqueSources.size < 2;
   });
-  
-  console.log(`[ArticleGrouper] After deduplication: ${multiSourceGroupsFinal.length} multi-source groups, ${singleSourceGroupsFinal.length} single-source groups`);
-  
-  // Return multi-source groups first, but if we have very few, include some single-source as fallback
-  // This ensures we always return groups when articles exist
-  if (multiSourceGroupsFinal.length >= 3) {
-    // We have enough multi-source groups, return only those
-    return multiSourceGroupsFinal;
-  } else if (multiSourceGroupsFinal.length > 0) {
-    // We have some multi-source groups, return them plus a few single-source for variety
-    const combined = [...multiSourceGroupsFinal, ...singleSourceGroupsFinal.slice(0, 18 - multiSourceGroupsFinal.length)];
-    console.log(`[ArticleGrouper] Returning ${multiSourceGroupsFinal.length} multi-source + ${combined.length - multiSourceGroupsFinal.length} single-source groups`);
+
+  console.log(
+    `[ArticleGrouper] After deduplication: ${multiSourceGroupsFinal.length} multi-source groups, ${singleSourceGroupsFinal.length} single-source groups`
+  );
+
+  // IMPORTANT: DO NOT enforce any page/size limits here.
+  // Return ALL groups and let the router (newsAggregate.js) handle pagination (9, 18, etc.)
+  if (multiSourceGroupsFinal.length > 0) {
+    const combined = [...multiSourceGroupsFinal, ...singleSourceGroupsFinal];
+    console.log(
+      `[ArticleGrouper] Returning ${combined.length} groups (multi-source first, then single-source)`
+    );
     return combined;
-  } else if (singleSourceGroupsFinal.length > 0) {
-    // No multi-source groups, but we have single-source - return them as fallback
-    console.log(`[ArticleGrouper] WARNING: No multi-source groups found. Returning ${Math.min(9, singleSourceGroupsFinal.length)} single-source groups as fallback.`);
-    return singleSourceGroupsFinal.slice(0, 9);
-  } else {
-    // No groups at all - this shouldn't happen if articles exist
-    console.error('[ArticleGrouper] ERROR: No groups created at all!');
-    return [];
   }
+
+  if (singleSourceGroupsFinal.length > 0) {
+    console.log(
+      `[ArticleGrouper] WARNING: No multi-source groups found. Returning ${singleSourceGroupsFinal.length} single-source groups`
+    );
+    return singleSourceGroupsFinal;
+  }
+
+  console.error("[ArticleGrouper] ERROR: No groups created at all!");
+  return [];
 }
 
 module.exports = {
   groupSimilarArticles,
   calculateSimilarity,
-  // Export for testing
   normalizeText,
   extractKeyTerms,
-  jaccardSimilarity
+  jaccardSimilarity,
 };
-
