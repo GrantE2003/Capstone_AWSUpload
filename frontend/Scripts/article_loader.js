@@ -230,9 +230,10 @@
     const titleEl = document.createElement("h3");
     titleEl.className = "story-title";
     titleEl.textContent =
-      (group.groupTitle && String(group.groupTitle)) ||
       (primaryArticle && (primaryArticle.title || primaryArticle.headline)) ||
+      (group.groupTitle && String(group.groupTitle)) ||
       "Untitled story";
+
     groupDiv.appendChild(titleEl);
 
     // Get the Source and Date Info
