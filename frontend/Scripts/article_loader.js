@@ -16,7 +16,7 @@
     }
 
     // Environment used for Production Deployment
-    const renderUrl = "https://capstone-awsupload.onrender.com";
+    const renderUrl = "https://capstone-awsupload-1.onrender.com";
     console.log("[Article Loader] Using Render backend for production:", renderUrl);
     return renderUrl;
   })();
