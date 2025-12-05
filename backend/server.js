@@ -28,45 +28,6 @@ app.get('/', (req, res) => {
   res.sendFile('Pages/index.html', { root: '../frontend' });
 });
 
-// In-memory cache with TTL
-const cache = new Map();
-const CACHE_TTL = 60 * 1000; // 60 seconds
-
-// Helper to clear cache entries for a specific country
-function clearCacheForCountry(countryCode) {
-  const keysToDelete = [];
-  for (const [key, value] of cache.entries()) {
-    if (key.includes(`country=${countryCode}`) || key.includes(`country=${encodeURIComponent(countryCode)}`)) {
-      keysToDelete.push(key);
-    }
-  }
-  keysToDelete.forEach(key => cache.delete(key));
-  console.log(`Cleared ${keysToDelete.length} cache entries for country: ${countryCode}`);
-}
-
-// Cache helper functions
-function getCacheKey(url, params) {
-  return `${url}?${new URLSearchParams(params).toString()}`;
-}
-
-function getFromCache(key) {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached;
-  }
-  if (cached) {
-    cache.delete(key); // Remove expired cache
-  }
-  return null;
-}
-
-function setCache(key, data) {
-  cache.set(key, {
-    data,
-    timestamp: Date.now()
-  });
-}
-
 // Guardian API configuration
 const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY;
 const GUARDIAN_BASE_URL = 'https://content.guardianapis.com';
@@ -75,12 +36,8 @@ const MOCK_MODE = !GUARDIAN_API_KEY;
 // OpenAI configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Mock data for when no API key is provided
+// Mock data for when no API key is provided (used by aggregate endpoint)
 const mockData = {
-  topics: [
-    'world', 'us-news', 'business', 'technology',
-    'sport', 'culture', 'science', 'health', 'politics'
-  ],
   articles: [
     {
       id: 'mock-1',
@@ -103,68 +60,66 @@ const mockData = {
 
 // Country code to country name mapping
 const COUNTRY_NAMES = {
-  'US': 'United States',
-  'GB': 'United Kingdom',
-  'CA': 'Canada',
-  'AU': 'Australia',
-  'DE': 'Germany',
-  'FR': 'France',
-  'IT': 'Italy',
-  'ES': 'Spain',
-  'NL': 'Netherlands',
-  'BE': 'Belgium',
-  'CH': 'Switzerland',
-  'AT': 'Austria',
-  'SE': 'Sweden',
-  'NO': 'Norway',
-  'DK': 'Denmark',
-  'FI': 'Finland',
-  'IE': 'Ireland',
-  'PT': 'Portugal',
-  'GR': 'Greece',
-  'PL': 'Poland',
-  'CZ': 'Czech Republic',
-  'HU': 'Hungary',
-  'RO': 'Romania',
-  'BG': 'Bulgaria',
-  'HR': 'Croatia',
-  'SI': 'Slovenia',
-  'SK': 'Slovakia',
-  'JP': 'Japan',
-  'CN': 'China',
-  'IN': 'India',
-  'KR': 'South Korea',
-  'SG': 'Singapore',
-  'MY': 'Malaysia',
-  'TH': 'Thailand',
-  'ID': 'Indonesia',
-  'PH': 'Philippines',
-  'VN': 'Vietnam',
-  'NZ': 'New Zealand',
-  'ZA': 'South Africa',
-  'EG': 'Egypt',
-  'KE': 'Kenya',
-  'NG': 'Nigeria',
-  'BR': 'Brazil',
-  'MX': 'Mexico',
-  'AR': 'Argentina',
-  'CL': 'Chile',
-  'CO': 'Colombia',
-  'PE': 'Peru',
-  'AE': 'United Arab Emirates',
-  'SA': 'Saudi Arabia',
-  'IL': 'Israel',
-  'TR': 'Turkey',
-  'RU': 'Russia',
-  'UA': 'Ukraine'
+  US: 'United States',
+  GB: 'United Kingdom',
+  CA: 'Canada',
+  AU: 'Australia',
+  DE: 'Germany',
+  FR: 'France',
+  IT: 'Italy',
+  ES: 'Spain',
+  NL: 'Netherlands',
+  BE: 'Belgium',
+  CH: 'Switzerland',
+  AT: 'Austria',
+  SE: 'Sweden',
+  NO: 'Norway',
+  DK: 'Denmark',
+  FI: 'Finland',
+  IE: 'Ireland',
+  PT: 'Portugal',
+  GR: 'Greece',
+  PL: 'Poland',
+  CZ: 'Czech Republic',
+  HU: 'Hungary',
+  RO: 'Romania',
+  BG: 'Bulgaria',
+  HR: 'Croatia',
+  SI: 'Slovenia',
+  SK: 'Slovakia',
+  JP: 'Japan',
+  CN: 'China',
+  IN: 'India',
+  KR: 'South Korea',
+  SG: 'Singapore',
+  MY: 'Malaysia',
+  TH: 'Thailand',
+  ID: 'Indonesia',
+  PH: 'Philippines',
+  VN: 'Vietnam',
+  NZ: 'New Zealand',
+  ZA: 'South Africa',
+  EG: 'Egypt',
+  KE: 'Kenya',
+  NG: 'Nigeria',
+  BR: 'Brazil',
+  MX: 'Mexico',
+  AR: 'Argentina',
+  CL: 'Chile',
+  CO: 'Colombia',
+  PE: 'Peru',
+  AE: 'United Arab Emirates',
+  SA: 'Saudi Arabia',
+  IL: 'Israel',
+  TR: 'Turkey',
+  RU: 'Russia',
+  UA: 'Ukraine'
 };
 
-// Helper function to get country name from code
 function getCountryName(countryCode) {
   return COUNTRY_NAMES[countryCode] || null;
 }
 
-// Helper function to build query with country filter
 function buildQueryWithCountry(originalQuery, countryCode) {
   const countryName = getCountryName(countryCode);
   if (!countryName) {
@@ -173,21 +128,21 @@ function buildQueryWithCountry(originalQuery, countryCode) {
   }
 
   const countryVariations = {
-    'US': ['United States', 'USA', 'US', 'America', 'American'],
-    'GB': ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
-    'CA': ['Canada', 'Canadian'],
-    'AU': ['Australia', 'Australian'],
-    'DE': ['Germany', 'German'],
-    'FR': ['France', 'French'],
-    'IT': ['Italy', 'Italian'],
-    'ES': ['Spain', 'Spanish'],
-    'JP': ['Japan', 'Japanese'],
-    'CN': ['China', 'Chinese'],
-    'IN': ['India', 'Indian'],
-    'BR': ['Brazil', 'Brazilian'],
-    'MX': ['Mexico', 'Mexican'],
-    'RU': ['Russia', 'Russian'],
-    'KR': ['South Korea', 'Korean'],
+    US: ['United States', 'USA', 'US', 'America', 'American'],
+    GB: ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
+    CA: ['Canada', 'Canadian'],
+    AU: ['Australia', 'Australian'],
+    DE: ['Germany', 'German'],
+    FR: ['France', 'French'],
+    IT: ['Italy', 'Italian'],
+    ES: ['Spain', 'Spanish'],
+    JP: ['Japan', 'Japanese'],
+    CN: ['China', 'Chinese'],
+    IN: ['India', 'Indian'],
+    BR: ['Brazil', 'Brazilian'],
+    MX: ['Mexico', 'Mexican'],
+    RU: ['Russia', 'Russian'],
+    KR: ['South Korea', 'Korean']
   };
 
   const variations = countryVariations[countryCode] || [countryName, countryCode];
@@ -213,55 +168,117 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   const bodyText = (article.fields?.bodyText || '').toLowerCase();
   const sectionName = (article.sectionName || '').toLowerCase();
   const sectionId = (article.sectionId || '').toLowerCase();
-  const tags = (article.tags || []).map(tag => {
-    if (typeof tag === 'string') return tag.toLowerCase();
-    return (tag.webTitle || tag.id || '').toLowerCase();
-  }).filter(Boolean);
+  const tags = (article.tags || [])
+    .map(tag => (typeof tag === 'string' ? tag.toLowerCase() : (tag.webTitle || tag.id || '').toLowerCase()))
+    .filter(Boolean);
 
   const allText = `${title} ${trailText} ${bodyText} ${sectionName} ${tags.join(' ')}`.toLowerCase();
 
   const countryIndicators = {
-    'US': {
+    US: {
       sports: {
-        positive: ['united states', 'usa', 'us ', 'american', 'america', 'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ncaa', 'college football', 'super bowl', 'world series', 'stanley cup', 'nba finals', 'march madness', 'nfl playoffs', 'nba playoffs', 'mlb playoffs', 'nhl playoffs', 'dodgers', 'yankees', 'lakers', 'warriors', 'cowboys', 'patriots'],
-        negative: ['premier league', 'english', 'england', 'uk', 'british', 'britain', 'efl', 'championship', 'fa cup', 'scotland', 'wales', 'celtic', 'rangers', 'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'west ham', 'newcastle', 'brighton']
+        positive: [
+          'united states', 'usa', 'us ', 'american', 'america',
+          'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ncaa', 'college football',
+          'super bowl', 'world series', 'stanley cup', 'nba finals', 'march madness',
+          'nfl playoffs', 'nba playoffs', 'mlb playoffs', 'nhl playoffs',
+          'dodgers', 'yankees', 'lakers', 'warriors', 'cowboys', 'patriots'
+        ],
+        negative: [
+          'premier league', 'english', 'england', 'uk', 'british', 'britain',
+          'efl', 'championship', 'fa cup', 'scotland', 'wales', 'celtic', 'rangers',
+          'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'west ham',
+          'newcastle', 'brighton'
+        ]
       },
       politics: {
-        positive: ['united states', 'usa', 'us ', 'american', 'america', 'congress', 'senate', 'house of representatives', 'white house', 'supreme court', 'washington dc', 'capitol hill', 'president', 'senator', 'representative', 'democrat', 'republican', 'biden', 'trump', 'federal', 'us government', 'us politics'],
-        negative: ['westminster', 'number 10', 'downing street', 'uk parliament', 'british parliament', 'house of commons', 'house of lords', 'prime minister', 'mp ', 'mps', 'tory', 'labour party', 'scottish parliament', 'welsh assembly']
+        positive: [
+          'united states', 'usa', 'us ', 'american', 'america',
+          'congress', 'senate', 'house of representatives', 'white house',
+          'supreme court', 'washington dc', 'capitol hill', 'president', 'senator',
+          'representative', 'democrat', 'republican', 'biden', 'trump',
+          'federal', 'us government', 'us politics'
+        ],
+        negative: [
+          'westminster', 'number 10', 'downing street', 'uk parliament',
+          'british parliament', 'house of commons', 'house of lords', 'prime minister',
+          'mp ', 'mps', 'tory', 'labour party', 'scottish parliament', 'welsh assembly'
+        ]
       },
       business: {
-        positive: ['united states', 'usa', 'us ', 'american', 'america', 'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed', 'us economy', 'us market', 'wall street', 'us dollar', 'us companies', 'us business', 'us trade'],
-        negative: ['ftse', 'london stock exchange', 'uk economy', 'uk market', 'pound sterling', 'bank of england', 'uk companies', 'uk business']
+        positive: [
+          'united states', 'usa', 'us ', 'american', 'america',
+          'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed',
+          'us economy', 'us market', 'wall street', 'us dollar', 'us companies',
+          'us business', 'us trade'
+        ],
+        negative: [
+          'ftse', 'london stock exchange', 'uk economy', 'uk market',
+          'pound sterling', 'bank of england', 'uk companies', 'uk business'
+        ]
       },
       positive: ['united states', 'usa', 'us ', 'american', 'america'],
-      negative: ['premier league', 'english', 'england', 'uk', 'british', 'britain', 'westminster', 'number 10', 'uk parliament', 'ftse', 'london stock exchange']
+      negative: [
+        'premier league', 'english', 'england', 'uk', 'british', 'britain',
+        'westminster', 'number 10', 'uk parliament', 'ftse', 'london stock exchange'
+      ]
     },
-    'GB': {
+    GB: {
       sports: {
-        positive: ['united kingdom', 'uk', 'britain', 'british', 'england', 'english', 'scotland', 'scottish', 'wales', 'welsh', 'premier league', 'efl', 'championship', 'fa cup', 'celtic', 'rangers', 'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'west ham', 'newcastle', 'brighton'],
-        negative: ['nfl', 'nba', 'mlb', 'nhl', 'american football', 'super bowl', 'world series', 'stanley cup', 'nba finals']
+        positive: [
+          'united kingdom', 'uk', 'britain', 'british', 'england', 'english',
+          'scotland', 'scottish', 'wales', 'welsh', 'premier league', 'efl',
+          'championship', 'fa cup', 'celtic', 'rangers', 'manchester', 'liverpool',
+          'chelsea', 'arsenal', 'tottenham', 'west ham', 'newcastle', 'brighton'
+        ],
+        negative: [
+          'nfl', 'nba', 'mlb', 'nhl', 'american football', 'super bowl',
+          'world series', 'stanley cup', 'nba finals'
+        ]
       },
       politics: {
-        positive: ['united kingdom', 'uk', 'britain', 'british', 'england', 'english', 'westminster', 'number 10', 'downing street', 'uk parliament', 'british parliament', 'house of commons', 'house of lords', 'prime minister', 'mp ', 'mps', 'tory', 'labour party', 'scottish parliament', 'welsh assembly'],
-        negative: ['congress', 'senate', 'house of representatives', 'white house', 'supreme court', 'washington dc', 'capitol hill', 'president', 'senator', 'representative']
+        positive: [
+          'united kingdom', 'uk', 'britain', 'british', 'england', 'english',
+          'westminster', 'number 10', 'downing street', 'uk parliament',
+          'british parliament', 'house of commons', 'house of lords',
+          'prime minister', 'mp ', 'mps', 'tory', 'labour party',
+          'scottish parliament', 'welsh assembly'
+        ],
+        negative: [
+          'congress', 'senate', 'house of representatives', 'white house',
+          'supreme court', 'washington dc', 'capitol hill', 'president',
+          'senator', 'representative'
+        ]
       },
       business: {
-        positive: ['united kingdom', 'uk', 'britain', 'british', 'ftse', 'london stock exchange', 'uk economy', 'uk market', 'pound sterling', 'bank of england', 'uk companies', 'uk business'],
-        negative: ['nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed', 'us economy', 'us market', 'wall street']
+        positive: [
+          'united kingdom', 'uk', 'britain', 'british', 'ftse',
+          'london stock exchange', 'uk economy', 'uk market', 'pound sterling',
+          'bank of england', 'uk companies', 'uk business'
+        ],
+        negative: [
+          'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed',
+          'us economy', 'us market', 'wall street'
+        ]
       },
       positive: ['united kingdom', 'uk', 'britain', 'british', 'england', 'english'],
-      negative: ['nfl', 'nba', 'mlb', 'nhl', 'congress', 'senate', 'white house', 'nyse', 'nasdaq']
+      negative: [
+        'nfl', 'nba', 'mlb', 'nhl', 'congress', 'senate', 'white house',
+        'nyse', 'nasdaq'
+      ]
     },
-    'CA': {
+    CA: {
       sports: {
-        positive: ['canada', 'canadian', 'cfl', 'maple leafs', 'blue jays', 'raptors', 'canucks', 'flames', 'oilers'],
+        positive: [
+          'canada', 'canadian', 'cfl', 'maple leafs', 'blue jays', 'raptors',
+          'canucks', 'flames', 'oilers'
+        ],
         negative: ['premier league', 'nfl', 'nba', 'mlb']
       },
       positive: ['canada', 'canadian'],
       negative: ['premier league', 'nfl', 'nba', 'mlb']
     },
-    'AU': {
+    AU: {
       sports: {
         positive: ['australia', 'australian', 'afl', 'nrl', 'a-league'],
         negative: ['premier league', 'nfl', 'nba']
@@ -274,21 +291,21 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   const indicators = countryIndicators[targetCountryCode];
   if (!indicators) {
     const countryVariationsMap = {
-      'US': ['United States', 'USA', 'US', 'America', 'American'],
-      'GB': ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
-      'CA': ['Canada', 'Canadian'],
-      'AU': ['Australia', 'Australian'],
-      'DE': ['Germany', 'German'],
-      'FR': ['France', 'French'],
-      'IT': ['Italy', 'Italian'],
-      'ES': ['Spain', 'Spanish'],
-      'JP': ['Japan', 'Japanese'],
-      'CN': ['China', 'Chinese'],
-      'IN': ['India', 'Indian'],
-      'BR': ['Brazil', 'Brazilian'],
-      'MX': ['Mexico', 'Mexican'],
-      'RU': ['Russia', 'Russian'],
-      'KR': ['South Korea', 'Korean'],
+      US: ['United States', 'USA', 'US', 'America', 'American'],
+      GB: ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
+      CA: ['Canada', 'Canadian'],
+      AU: ['Australia', 'Australian'],
+      DE: ['Germany', 'German'],
+      FR: ['France', 'French'],
+      IT: ['Italy', 'Italian'],
+      ES: ['Spain', 'Spanish'],
+      JP: ['Japan', 'Japanese'],
+      CN: ['China', 'Chinese'],
+      IN: ['India', 'Indian'],
+      BR: ['Brazil', 'Brazilian'],
+      MX: ['Mexico', 'Mexican'],
+      RU: ['Russia', 'Russian'],
+      KR: ['South Korea', 'Korean']
     };
     const countryTerms = [
       targetCountryName.toLowerCase(),
@@ -296,12 +313,21 @@ function articleMatchesCountry(article, targetCountryCode, section) {
       ...(countryVariationsMap[targetCountryCode] || []).map(v => v.toLowerCase())
     ];
     const hasCountryTerm = countryTerms.some(term => allText.includes(term));
-    return { matches: hasCountryTerm, confidence: hasCountryTerm ? 'medium' : 'low', reason: hasCountryTerm ? 'Contains country term' : 'No country match' };
+    return {
+      matches: hasCountryTerm,
+      confidence: hasCountryTerm ? 'medium' : 'low',
+      reason: hasCountryTerm ? 'Contains country term' : 'No country match'
+    };
   }
 
   const isSports = section === 'sport' || sectionId === 'sport';
-  const isPolitics = section === 'politics' || sectionId === 'politics' || sectionName.includes('politics');
-  const isBusiness = section === 'business' || sectionId === 'business' || sectionName.includes('business') || sectionName.includes('economy');
+  const isPolitics =
+    section === 'politics' || sectionId === 'politics' || sectionName.includes('politics');
+  const isBusiness =
+    section === 'business' ||
+    sectionId === 'business' ||
+    sectionName.includes('business') ||
+    sectionName.includes('economy');
 
   let categoryIndicators = null;
   if (isSports && indicators.sports) {
@@ -340,66 +366,105 @@ function articleMatchesCountry(article, targetCountryCode, section) {
 
   if (isSports) {
     if (negativeCount > 0 && positiveCount === 0) {
-      return { matches: false, confidence: 'high', reason: `Contains ${negativeCount} negative indicator(s) for sports` };
+      return {
+        matches: false,
+        confidence: 'high',
+        reason: `Contains ${negativeCount} negative indicator(s) for sports`
+      };
     }
     if (positiveCount === 0 && negativeCount === 0) {
-      const genericCountryTerms = [
-        targetCountryName.toLowerCase(),
-        targetCountryCode.toLowerCase()
-      ];
+      const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
       const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
       if (hasGenericTerm) {
-        return { matches: true, confidence: 'medium', reason: 'Contains country name in content' };
+        return {
+          matches: true,
+          confidence: 'medium',
+          reason: 'Contains country name in content'
+        };
       }
-      return { matches: false, confidence: 'medium', reason: 'No country-specific sports indicators' };
+      return {
+        matches: false,
+        confidence: 'medium',
+        reason: 'No country-specific sports indicators'
+      };
     }
     if (positiveCount > 0) {
-      return { matches: true, confidence: positiveCount >= 2 ? 'high' : 'medium', reason: `Contains ${positiveCount} positive indicator(s)` };
+      return {
+        matches: true,
+        confidence: positiveCount >= 2 ? 'high' : 'medium',
+        reason: `Contains ${positiveCount} positive indicator(s)`
+      };
     }
   } else {
     const isStrictCategory = isPolitics || isBusiness;
 
     if (isStrictCategory) {
       if (negativeCount > 0 && positiveCount === 0) {
-        return { matches: false, confidence: 'high', reason: `Contains ${negativeCount} negative indicator(s) for ${section}` };
+        return {
+          matches: false,
+          confidence: 'high',
+          reason: `Contains ${negativeCount} negative indicator(s) for ${section}`
+        };
       }
       if (positiveCount === 0 && negativeCount === 0) {
-        const genericCountryTerms = [
-          targetCountryName.toLowerCase(),
-          targetCountryCode.toLowerCase()
-        ];
+        const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
         const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
         if (hasGenericTerm) {
-          return { matches: true, confidence: 'medium', reason: 'Contains country name in content' };
+          return {
+            matches: true,
+            confidence: 'medium',
+            reason: 'Contains country name in content'
+          };
         }
-        return { matches: false, confidence: 'medium', reason: `No country-specific indicators for ${section}` };
+        return {
+          matches: false,
+          confidence: 'medium',
+          reason: `No country-specific indicators for ${section}`
+        };
       }
     } else {
       if (negativeCount > positiveCount && negativeCount >= 2) {
-        return { matches: false, confidence: 'medium', reason: 'More negative than positive indicators' };
+        return {
+          matches: false,
+          confidence: 'medium',
+          reason: 'More negative than positive indicators'
+        };
       }
     }
 
     if (positiveCount > 0) {
-      return { matches: true, confidence: positiveCount >= 2 ? 'high' : 'medium', reason: `Contains ${positiveCount} positive indicator(s)` };
+      return {
+        matches: true,
+        confidence: positiveCount >= 2 ? 'high' : 'medium',
+        reason: `Contains ${positiveCount} positive indicator(s)`
+      };
     }
 
     if (!isStrictCategory) {
-      const genericCountryTerms = [
-        targetCountryName.toLowerCase(),
-        targetCountryCode.toLowerCase()
-      ];
+      const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
       const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
       if (hasGenericTerm) {
-        return { matches: true, confidence: 'low', reason: 'Contains country name in content' };
+        return {
+          matches: true,
+          confidence: 'low',
+          reason: 'Contains country name in content'
+        };
       }
     }
   }
 
   if (isSports || isPolitics || isBusiness) {
-    return { matches: false, confidence: 'low', reason: `No country indicators found for ${section} article` };
+    return {
+      matches: false,
+      confidence: 'low',
+      reason: `No country indicators found for ${section} article`
+    };
   }
-  return { matches: true, confidence: 'low', reason: 'No clear country indicators - allowing as global content' };
+  return {
+    matches: true,
+    confidence: 'low',
+    reason: 'No clear country indicators - allowing as global content'
+  };
 }
 
 /**
@@ -426,184 +491,35 @@ function filterArticlesByCountry(articles, countryCode, section, includeInternat
     }
   }
 
-  console.log(`[COUNTRY FILTER] Filtered ${articles.length} articles to ${filtered.length} for country ${countryCode} (section: ${section}, strict: ${isStrictCategory})`);
+  console.log(
+    `[COUNTRY FILTER] Filtered ${articles.length} articles to ${filtered.length} for country ${countryCode} (section: ${section}, strict: ${isStrictCategory})`
+  );
   return filtered;
 }
 
-// Helper function to transform Guardian API response to simple object
-function transformArticle(article) {
-  return {
-    id: article.id,
-    title: article.webTitle,
-    url: article.webUrl,
-    sectionId: article.sectionId,
-    sectionName: article.sectionName,
-    publishedAt: article.webPublicationDate
-  };
-}
-
-// Guardian articles endpoint
-app.get('/api/guardian', async (req, res) => {
-  try {
-    const { section, q, limit = 6, country } = req.query;
-
-    console.log('[NEWS REQUEST - BACKEND]', {
-      endpoint: '/api/guardian',
-      query: req.query,
-      section: section || 'none',
-      country: country || 'none',
-      queryText: q || 'none'
-    });
-
-    if (MOCK_MODE) {
-      const mockArticles = [
-        {
-          id: 'mock-1',
-          title: 'Sample Technology Article',
-          url: 'https://example.com/tech-news',
-          sectionId: 'technology',
-          sectionName: 'Technology',
-          date: new Date().toISOString(),
-          trailText: 'This is a sample article about technology trends.',
-          bodyText: 'This is the full body text of the sample article. It contains detailed information about the topic.'
-        }
-      ];
-
-      return res.json({ items: mockArticles });
-    }
-
-    const params = {
-      'api-key': GUARDIAN_API_KEY,
-      'show-fields': 'trailText,bodyText',
-      'show-tags': 'all',
-      'page-size': Math.min(limit * 3, 50),
-      'order-by': 'newest'
-    };
-
-    if (section) params.section = section;
-
-    let query = q || '';
-    if (country) {
-      clearCacheForCountry(country);
-      query = buildQueryWithCountry(query, country);
-      console.log('Built query with country:', query);
-    }
-    if (query) params.q = query;
-
-    if (req.query._t) {
-      delete params._t;
-    }
-
-    console.log('Final API params:', JSON.stringify(params, null, 2));
-
-    const cacheKey = getCacheKey(`${GUARDIAN_BASE_URL}/search`, params);
-    console.log('Cache key:', cacheKey);
-
-    const cachedResult = getFromCache(cacheKey);
-
-    if (cachedResult && !country) {
-      console.log('Returning cached result');
-      return res.json(cachedResult.data);
-    } else if (cachedResult && country) {
-      const cacheAge = Date.now() - cachedResult.timestamp;
-      if (cacheAge < 10 * 1000) {
-        console.log('Returning cached country-filtered result (age:', cacheAge, 'ms)');
-        return res.json(cachedResult.data);
-      } else {
-        console.log('Cache expired for country filter, fetching fresh results');
-      }
-    }
-
-    console.log('[NEWS API CALL]', {
-      category: section || 'general',
-      provider: 'Guardian',
-      url: `${GUARDIAN_BASE_URL}/search`,
-      params: params,
-      countryInQuery: country || 'none'
-    });
-    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
-
-    if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
-    }
-
-    let articles = response.data.response.results;
-
-    if (articles && articles.length > 0) {
-      console.log('[NEWS API RESPONSE SAMPLE]', {
-        category: section || 'general',
-        totalArticles: articles.length,
-        sampleArticles: articles.slice(0, 3).map(a => ({
-          title: a.webTitle,
-          sectionName: a.sectionName,
-          sectionId: a.sectionId,
-          tags: (a.tags || []).slice(0, 3).map(t => t.webTitle || t.id || t),
-          hasTrailText: !!a.fields?.trailText,
-          hasBodyText: !!a.fields?.bodyText
-        }))
-      });
-    }
-
-    const includeInternational = req.query.includeInternational === 'true';
-    const originalCount = articles.length;
-
-    if (country) {
-      console.log(`[COUNTRY FILTER] Applying filter: country=${country}, section=${section || 'none'}, includeInternational=${includeInternational}`);
-      articles = filterArticlesByCountry(articles, country, section || '', includeInternational);
-      console.log(`[COUNTRY FILTER] Filtered from ${originalCount} to ${articles.length} articles`);
-
-      if (articles.length < limit && originalCount > 0) {
-        console.log(`Only ${articles.length} articles after filtering, requested ${limit}. Consider fetching more.`);
-      }
-
-      articles = articles.slice(0, limit);
-    } else {
-      articles = articles.slice(0, limit);
-    }
-
-    const transformedResults = {
-      items: articles.map(article => ({
-        id: article.id,
-        title: article.webTitle,
-        url: article.webUrl,
-        sectionId: article.sectionId,
-        sectionName: article.sectionName,
-        date: article.webPublicationDate,
-        trailText: article.fields?.trailText || '',
-        bodyText: article.fields?.bodyText || ''
-      }))
-    };
-
-    setCache(cacheKey, transformedResults);
-
-    console.log(`Returning ${transformedResults.items.length} articles after country filtering`);
-    res.json(transformedResults);
-
-  } catch (error) {
-    console.error('Guardian API error:', error.message);
-    res.status(500).json({ error: error.message || 'Failed to fetch articles' });
-  }
-});
-
 /**
- * UPDATED: Aggregate endpoint for grouped stories
+ * Aggregate endpoint for grouped stories
  * Supports: category, query, q, country, page, limit
- * Returns: { groupedArticles: [...], rawArticles: [...], warnings: [...], pagination: {...} }
+ * Returns: { groupedArticles, rawArticles, warnings, pagination, mockMode, fallbackMode }
  */
 app.get('/api/news/aggregate', async (req, res) => {
   try {
-    const { category, country, page = 2, limit = 18, query, q } = req.query;
+    const { category, country, page = 1, limit = 18, query, q } = req.query;
+
+    const numericLimit = Number(limit) || 18;
+    const numericPage = Number(page) || 1;
 
     console.log('[AGGREGATE] Request received', {
       category,
       country,
-      page,
-      limit,
+      page: numericPage,
+      limit: numericLimit,
       query: query || q || ''
     });
 
+    // Mock mode (no Guardian key configured)
     if (MOCK_MODE) {
-      const articles = mockData.articles.slice(0, limit);
+      const articles = mockData.articles.slice(0, numericLimit);
       const grouped = articles.map((a, idx) => ({
         groupId: a.id || `mock-${idx}`,
         groupTitle: a.title,
@@ -626,10 +542,11 @@ app.get('/api/news/aggregate', async (req, res) => {
         rawArticles: articles,
         warnings: ['Mock mode enabled (no real Guardian data).'],
         pagination: {
-          currentPage: Number(page),
+          currentPage: numericPage,
           totalPages: 1
         },
-        mockMode: true
+        mockMode: true,
+        fallbackMode: false
       });
     }
 
@@ -638,21 +555,18 @@ app.get('/api/news/aggregate', async (req, res) => {
       'api-key': GUARDIAN_API_KEY,
       'show-fields': 'trailText,bodyText',
       'show-tags': 'all',
-      'page-size': Math.min(limit * 3, 50),
-      'page': page,
+      'page-size': Math.min(numericLimit * 3, 50),
+      page: numericPage,
       'order-by': 'newest'
     };
 
-    // Section / category (for topic pages)
     if (category) {
       params.section = category;
     }
 
-    // Build search query from query/q + country
     let searchQuery = query || q || '';
 
     if (country) {
-      clearCacheForCountry(country);
       searchQuery = buildQueryWithCountry(searchQuery, country);
       console.log('[AGGREGATE] Built query with country:', searchQuery);
     }
@@ -676,23 +590,26 @@ app.get('/api/news/aggregate', async (req, res) => {
     const totalPages = response.data.response.pages || 1;
 
     if (articles && articles.length > 0) {
-      console.log('[AGGREGATE] Sample articles:', articles.slice(0, 3).map(a => a.webTitle));
+      console.log(
+        '[AGGREGATE] Sample articles:',
+        articles.slice(0, 3).map(a => a.webTitle)
+      );
     }
 
-    // Optional content-based country filtering
     const includeInternational = req.query.includeInternational === 'true';
     const originalCount = articles.length;
 
     if (country) {
-      console.log(`[AGGREGATE] Applying country filter: country=${country}, category=${category || 'none'}, includeInternational=${includeInternational}`);
+      console.log(
+        `[AGGREGATE] Applying country filter: country=${country}, category=${category || 'none'}, includeInternational=${includeInternational}`
+      );
       articles = filterArticlesByCountry(articles, country, category || '', includeInternational);
       console.log(`[AGGREGATE] Filtered from ${originalCount} to ${articles.length} articles`);
     }
 
     // Limit final articles for grouping
-    articles = articles.slice(0, limit);
+    articles = articles.slice(0, numericLimit);
 
-    // Helper to build a summary from Guardian fields
     function buildSummaryFromArticle(a) {
       const trail = a.fields?.trailText || '';
       const body = a.fields?.bodyText || '';
@@ -717,7 +634,6 @@ app.get('/api/news/aggregate', async (req, res) => {
       return 'Summary not available. Please read the article for details.';
     }
 
-    // Simple grouping: each article = one group (matches your frontend expectations)
     const groupedArticles = articles.map((a, idx) => ({
       groupId: a.id || `guardian-${idx}`,
       groupTitle: a.webTitle,
@@ -750,12 +666,12 @@ app.get('/api/news/aggregate', async (req, res) => {
       rawArticles,
       warnings: [],
       pagination: {
-        currentPage: Number(page),
-        totalPages: totalPages
+        currentPage: numericPage,
+        totalPages
       },
-      mockMode: false
+      mockMode: false,
+      fallbackMode: false
     });
-
   } catch (error) {
     console.error('[AGGREGATE] Error:', error.message);
     res.status(500).json({
@@ -777,40 +693,46 @@ app.post('/api/summarize', async (req, res) => {
     console.log('AI Input - Text length:', text.length);
     console.log('AI Input - Text preview:', text.substring(0, 200) + '...');
 
+    // Fallback summary if no OpenAI key configured
     if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your_openai_api_key_here') {
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
       const keySentences = sentences.slice(0, 3);
       const summary = keySentences.join('. ').trim() + '.';
 
       return res.json({
-        summary: summary || 'Summary not available. Please read the full article for details.'
+        summary:
+          summary || 'Summary not available. Please read the full article for details.'
       });
     }
 
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a news fact extractor. Read the entire article and extract the specific facts, events, and details. Do NOT summarize or paraphrase. Extract the actual information from the article. Include specific names, dates, locations, numbers, quotes, and events mentioned in the article.'
-        },
-        {
-          role: 'user',
-          content: `Read this news article and extract the specific facts and details. Include names, dates, locations, numbers, quotes, and events mentioned in the article. Do not summarize - extract the actual information:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a news fact extractor. Read the entire article and extract the specific facts, events, and details. Do NOT summarize or paraphrase. Extract the actual information from the article. Include specific names, dates, locations, numbers, quotes, and events mentioned in the article.'
+          },
+          {
+            role: 'user',
+            content: `Read this news article and extract the specific facts and details. Include names, dates, locations, numbers, quotes, and events mentioned in the article. Do not summarize - extract the actual information:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
         }
-      ],
-      max_tokens: 400,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
       }
-    });
+    );
 
     const summary = response.data.choices[0].message.content;
     res.json({ summary });
-
   } catch (error) {
     console.error('OpenAI API error:', error.message);
     res.status(500).json({ error: 'Failed to generate summary' });
@@ -820,278 +742,6 @@ app.post('/api/summarize', async (req, res) => {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
-});
-
-// Topics endpoint
-app.get('/api/topics', (req, res) => {
-  res.json(mockData.topics);
-});
-
-// Search endpoint
-app.get('/api/search', async (req, res) => {
-  try {
-    const { q, section, page = 1, country } = req.query;
-
-    if (MOCK_MODE) {
-      const filteredArticles = mockData.articles.filter(article => {
-        if (section && article.sectionId !== section) return false;
-        if (q && !article.title.toLowerCase().includes(q.toLowerCase())) return false;
-        return true;
-      });
-
-      return res.json({
-        results: filteredArticles,
-        total: filteredArticles.length,
-        page: parseInt(page),
-        mockMode: true
-      });
-    }
-
-    const params = {
-      'api-key': GUARDIAN_API_KEY,
-      'show-fields': 'headline,trailText,bodyText',
-      'show-tags': 'all',
-      'page-size': Math.min(30, 10 * 3),
-      'page': page
-    };
-
-    let query = q || '';
-    if (country) {
-      clearCacheForCountry(country);
-      query = buildQueryWithCountry(query, country);
-    }
-    if (query) params.q = query;
-    if (section) params.section = section;
-
-    console.log('[NEWS API CALL]', {
-      category: section || 'search',
-      provider: 'Guardian',
-      url: `${GUARDIAN_BASE_URL}/search`,
-      params: params,
-      countryInQuery: country || 'none'
-    });
-
-    const cacheKey = getCacheKey(`${GUARDIAN_BASE_URL}/search`, params);
-    const cachedResult = getFromCache(cacheKey);
-
-    if (cachedResult && !country) {
-      return res.json(cachedResult.data);
-    } else if (cachedResult && country) {
-      const cacheAge = Date.now() - cachedResult.timestamp;
-      if (cacheAge < 10 * 1000) {
-        return res.json(cachedResult.data);
-      }
-    }
-
-    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
-
-    if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
-    }
-
-    let articles = response.data.response.results;
-    if (articles && articles.length > 0) {
-      console.log('[NEWS API RESPONSE SAMPLE]', {
-        category: section || 'search',
-        totalArticles: articles.length,
-        sampleTitles: articles.slice(0, 3).map(a => a.webTitle)
-      });
-    }
-
-    const includeInternational = req.query.includeInternational === 'true';
-    const originalCount = articles.length;
-
-    if (country) {
-      console.log(`[COUNTRY FILTER] Applying filter: country=${country}, section=${section || 'search'}, includeInternational=${includeInternational}`);
-      articles = filterArticlesByCountry(articles, country, section || '', includeInternational);
-      console.log(`[COUNTRY FILTER] Filtered from ${originalCount} to ${articles.length} articles`);
-      articles = articles.slice(0, 10);
-    } else {
-      articles = articles.slice(0, 10);
-    }
-
-    const transformedResults = {
-      results: articles.map(transformArticle),
-      total: response.data.response.total,
-      page: response.data.response.currentPage,
-      mockMode: false
-    };
-
-    setCache(cacheKey, transformedResults);
-
-    res.json(transformedResults);
-
-  } catch (error) {
-    console.error('Search error:', error.message);
-    res.status(500).json({
-      error: error.message || 'Internal server error'
-    });
-  }
-});
-
-// Section endpoint
-app.get('/api/section/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { page = 1, country } = req.query;
-
-    console.log('[NEWS REQUEST - BACKEND]', {
-      endpoint: '/api/section/:id',
-      sectionId: id,
-      query: req.query,
-      country: country || 'none'
-    });
-
-    if (MOCK_MODE) {
-      const sectionArticles = mockData.articles.filter(article => article.sectionId === id);
-
-      return res.json({
-        results: sectionArticles,
-        total: sectionArticles.length,
-        page: parseInt(page),
-        sectionId: id,
-        mockMode: true
-      });
-    }
-
-    const params = {
-      'api-key': GUARDIAN_API_KEY,
-      'section': id,
-      'show-fields': 'headline,trailText,bodyText',
-      'show-tags': 'all',
-      'page-size': Math.min(30, 10 * 3),
-      'page': page
-    };
-
-    if (country) {
-      clearCacheForCountry(country);
-      const countryQuery = buildQueryWithCountry('', country);
-      if (countryQuery) params.q = countryQuery;
-    }
-
-    console.log('[NEWS API CALL]', {
-      category: id,
-      provider: 'Guardian',
-      url: `${GUARDIAN_BASE_URL}/search`,
-      params: params,
-      countryInQuery: country || 'none'
-    });
-
-    const cacheKey = getCacheKey(`${GUARDIAN_BASE_URL}/search`, params);
-    const cachedResult = getFromCache(cacheKey);
-
-    if (cachedResult && !country) {
-      return res.json(cachedResult.data);
-    } else if (cachedResult && country) {
-      const cacheAge = Date.now() - cachedResult.timestamp;
-      if (cacheAge < 10 * 1000) {
-        return res.json(cachedResult.data);
-      }
-    }
-
-    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
-
-    if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
-    }
-
-    let articles = response.data.response.results;
-    if (articles && articles.length > 0) {
-      console.log('[NEWS API RESPONSE SAMPLE]', {
-        category: id,
-        totalArticles: articles.length,
-        sampleTitles: articles.slice(0, 3).map(a => a.webTitle)
-      });
-    }
-
-    const includeInternational = req.query.includeInternational === 'true';
-    const originalCount = articles.length;
-
-    if (country) {
-      console.log(`[COUNTRY FILTER] Applying filter: country=${country}, section=${id}, includeInternational=${includeInternational}`);
-      articles = filterArticlesByCountry(articles, country, id, includeInternational);
-      console.log(`[COUNTRY FILTER] Filtered from ${originalCount} to ${articles.length} articles`);
-      articles = articles.slice(0, 10);
-    } else {
-      articles = articles.slice(0, 10);
-    }
-
-    const transformedResults = {
-      results: articles.map(transformArticle),
-      total: response.data.response.total,
-      page: response.data.response.currentPage,
-      sectionId: id,
-      mockMode: false
-    };
-
-    setCache(cacheKey, transformedResults);
-
-    res.json(transformedResults);
-
-  } catch (error) {
-    console.error('Section error:', error.message);
-    res.status(500).json({
-      error: error.message || 'Internal server error'
-    });
-  }
-});
-
-// Debug endpoint for testing country filtering
-app.get('/debug/news', async (req, res) => {
-  try {
-    const { country, category, limit = 10 } = req.query;
-
-    if (!country || !category) {
-      return res.status(400).json({
-        error: 'Missing required parameters: country and category'
-      });
-    }
-
-    const params = {
-      'api-key': GUARDIAN_API_KEY,
-      'section': category,
-      'show-fields': 'trailText,bodyText',
-      'show-tags': 'all',
-      'page-size': Math.min(limit * 3, 50),
-      'order-by': 'newest'
-    };
-
-    if (country) {
-      const query = buildQueryWithCountry('', country);
-      if (query) params.q = query;
-    }
-
-    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
-
-    if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
-    }
-
-    let articles = response.data.response.results;
-    const originalCount = articles.length;
-
-    articles = filterArticlesByCountry(articles, country, category, false);
-    articles = articles.slice(0, limit);
-
-    res.json({
-      countryCode: country,
-      category: category,
-      originalCount: originalCount,
-      filteredCount: articles.length,
-      articles: articles.map(article => ({
-        title: article.webTitle,
-        sectionName: article.sectionName,
-        sectionId: article.sectionId,
-        tags: (article.tags || []).slice(0, 5).map(t => t.webTitle || t.id || t),
-        inferredCountry: articleMatchesCountry(article, country, category),
-        url: article.webUrl
-      }))
-    });
-
-  } catch (error) {
-    console.error('Debug endpoint error:', error.message);
-    res.status(500).json({ error: error.message || 'Failed to fetch debug data' });
-  }
 });
 
 // Error handling middleware
@@ -1110,7 +760,7 @@ app.listen(PORT, () => {
   console.log(`Guardian API Proxy Server running on port ${PORT}`);
   console.log(`API Key configured: ${GUARDIAN_API_KEY ? 'Yes' : 'No (Mock Mode)'}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
-  console.log(`Available topics: http://localhost:${PORT}/api/topics`);
-  console.log(`Search: http://localhost:${PORT}/api/search?q=technology`);
-  console.log(`Section: http://localhost:${PORT}/api/section/technology`);
+  console.log(
+    `Aggregate example: http://localhost:${PORT}/api/news/aggregate?category=world&limit=6`
+  );
 });
