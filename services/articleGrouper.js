@@ -393,7 +393,7 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
     return multiSourceGroupsFinal;
   } else if (multiSourceGroupsFinal.length > 0) {
     // We have some multi-source groups, return them plus a few single-source for variety
-    const combined = [...multiSourceGroupsFinal, ...singleSourceGroupsFinal.slice(0, 9 - multiSourceGroupsFinal.length)];
+    const combined = [...multiSourceGroupsFinal, ...singleSourceGroupsFinal.slice(0, 18 - multiSourceGroupsFinal.length)];
     console.log(`[ArticleGrouper] Returning ${multiSourceGroupsFinal.length} multi-source + ${combined.length - multiSourceGroupsFinal.length} single-source groups`);
     return combined;
   } else if (singleSourceGroupsFinal.length > 0) {
