@@ -31,15 +31,14 @@ if (!CURRENTS_API_KEY) {
   console.warn('   Get your key at: https://currentsapi.services/ (free tier available)');
 }
 
-// LLM API - Required for summaries
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
-const LLM_API_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-3.5-turbo';
+// OpenRouter API - Required for summaries
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const LLM_API_URL = process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 
-if (!OPENAI_API_KEY) {
-  console.warn('[CONFIG] OPENAI_API_KEY or LLM_API_KEY not set - LLM summaries will use fallback');
-  console.warn('   Get your key at: https://platform.openai.com/api-keys');
-  console.warn('   Or set LLM_API_URL to point to your own LLM endpoint');
+if (!OPENROUTER_API_KEY) {
+  console.warn('[CONFIG] OPENROUTER_API_KEY not set - LLM summaries will use fallback');
+  console.warn('   Get your key at: https://openrouter.ai/keys');
 }
 
 // Log configuration status on startup
@@ -47,13 +46,13 @@ console.log('\n[CONFIG] API Configuration Status:');
 console.log(`   Guardian: ${GUARDIAN_API_KEY ? 'Configured' : 'Missing'}`);
 console.log(`   GDELT: ${GDELT_API_KEY ? 'Configured (optional)' : 'Using free tier'}`);
 console.log(`   Currents: ${CURRENTS_API_KEY ? 'Configured' : 'Missing'}`);
-console.log(`   LLM: ${OPENAI_API_KEY ? 'Configured' : 'Missing (will use fallback)'}\n`);
+console.log(`   OpenRouter: ${OPENROUTER_API_KEY ? 'Configured' : 'Missing (will use fallback)'}\n`);
 
 module.exports = {
   GUARDIAN_API_KEY,
   GDELT_API_KEY,
   CURRENTS_API_KEY,
-  OPENAI_API_KEY,
+  OPENROUTER_API_KEY,
   LLM_API_URL,
   LLM_MODEL
 };

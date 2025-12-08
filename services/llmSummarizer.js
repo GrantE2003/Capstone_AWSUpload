@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { OPENAI_API_KEY, LLM_API_URL, LLM_MODEL } = require('../config/apiKeys');
+const { OPENROUTER_API_KEY, LLM_API_URL, LLM_MODEL } = require('../config/apiKeys');
 
 /**
  * Summarizes a group of articles (multi-source).
@@ -15,9 +15,9 @@ async function summarizeArticleGroup(group) {
       };
     }
 
-    // If no LLM key, always use basic (non-AI) summary
-    if (!OPENAI_API_KEY) {
-      console.warn('[LLM] No OPENAI_API_KEY set – using basic fallback summary.');
+    // If no OpenRouter key, always use basic (non-AI) summary
+    if (!OPENROUTER_API_KEY) {
+      console.warn('[LLM] No OPENROUTER_API_KEY set – using basic fallback summary.');
       return generateBasicSummary(group);
     }
 
@@ -50,7 +50,7 @@ Return ONLY valid JSON with this exact shape:
     let apiResponse;
     try {
       apiResponse = await axios.post(
-        LLM_API_URL || 'https://api.openai.com/v1/chat/completions',
+        LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
         {
           model: LLM_MODEL || 'gpt-4.1-mini',
           messages: [
@@ -66,8 +66,10 @@ Return ONLY valid JSON with this exact shape:
         },
         {
           headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:4000',
+            'X-Title': 'News Summarizer'
           },
           timeout: 30000
         }

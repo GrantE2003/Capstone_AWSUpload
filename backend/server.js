@@ -33,13 +33,10 @@ const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY;
 const GUARDIAN_BASE_URL = 'https://content.guardianapis.com';
 const MOCK_MODE = !GUARDIAN_API_KEY;
 
-// OpenAI configuration
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const LLM_API_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-3.5-turbo';
-
-// Detect if using OpenRouter
-const isOpenRouter = LLM_API_URL.includes('openrouter.ai');
+// OpenRouter configuration
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const LLM_API_URL = process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 
 // Mock data for when no API key is provided (used by aggregate endpoint)
 const mockData = {
@@ -704,9 +701,9 @@ app.post('/api/summarize', async (req, res) => {
       });
     }
 
-    // Fallback summary if no OpenAI key configured
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your_openai_api_key_here') {
-      console.warn('[Summarize] No valid API key - using fallback summary');
+    // Fallback summary if no OpenRouter key configured
+    if (!OPENROUTER_API_KEY) {
+      console.warn('[Summarize] No OpenRouter API key - using fallback summary');
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
       const keySentences = sentences.slice(0, 3);
       const fallbackSummary = keySentences.join('. ').trim() + '.';
@@ -716,30 +713,24 @@ app.post('/api/summarize', async (req, res) => {
       });
     }
 
-    console.log('[Summarize] Calling LLM API:', LLM_API_URL);
+    console.log('[Summarize] Calling OpenRouter API:', LLM_API_URL);
     console.log('[Summarize] Using model:', LLM_MODEL);
-    console.log('[Summarize] Is OpenRouter:', isOpenRouter);
 
     // For OpenRouter, add provider prefix if not already present (e.g., "openai/gpt-4o-mini")
-    // For OpenAI, use the model directly
     let modelToUse = LLM_MODEL;
-    if (isOpenRouter && !modelToUse.includes('/')) {
+    if (!modelToUse.includes('/')) {
       // If model doesn't have provider prefix, add "openai/" prefix
       modelToUse = `openai/${modelToUse}`;
       console.log('[Summarize] Added provider prefix to model:', modelToUse);
     }
 
-    // Prepare headers
+    // Prepare headers for OpenRouter
     const headers = {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:4000',
+      'X-Title': 'News Summarizer'
     };
-
-    // OpenRouter recommends adding HTTP-Referer and X-Title headers (optional but helpful)
-    if (isOpenRouter) {
-      headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'http://localhost:4000';
-      headers['X-Title'] = 'News Summarizer';
-    }
 
     const response = await axios.post(
       LLM_API_URL,
@@ -772,7 +763,7 @@ app.post('/api/summarize', async (req, res) => {
       choicesLength: response.data?.choices?.length || 0
     });
 
-    // Extract summary from response (handle both OpenAI and OpenRouter formats)
+    // Extract summary from OpenRouter response
     let aiSummary = null;
     if (response.data && response.data.choices && response.data.choices.length > 0) {
       const firstChoice = response.data.choices[0];
@@ -808,8 +799,8 @@ app.post('/api/summarize', async (req, res) => {
       console.error('[Summarize] API response headers:', error.response.headers);
       console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
       
-      // OpenRouter specific error handling
-      if (isOpenRouter && error.response.data) {
+      // OpenRouter error handling
+      if (error.response.data) {
         if (error.response.status === 401) {
           console.error('[Summarize] OpenRouter: Authentication failed - check API key');
         } else if (error.response.status === 402) {
@@ -830,7 +821,7 @@ app.post('/api/summarize', async (req, res) => {
     // Extract detailed error message
     let errorMessage = 'Unable to generate summary. Please try again later.';
     if (error.response?.data) {
-      // OpenRouter error format
+      // Extract error from OpenRouter response
       if (error.response.data.error) {
         if (typeof error.response.data.error === 'string') {
           errorMessage = error.response.data.error;
