@@ -330,47 +330,70 @@
 
         console.log("[Article Loader] Summary response status:", resp.status, resp.statusText);
 
-        if (!resp.ok) {
-          const errorData = await resp.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `Summary request failed: ${resp.status} ${resp.statusText}`
-          );
-        }
+        const result = await resp.json().catch(async (parseError) => {
+          console.error("[Article Loader] Failed to parse JSON response:", parseError);
+          // Try to get text response
+          const textResponse = await resp.text();
+          console.error("[Article Loader] Raw response:", textResponse);
+          throw new Error(`Server returned invalid response: ${resp.status} ${resp.statusText}`);
+        });
 
-        const result = await resp.json();
         console.log("[Article Loader] Summary response received:", {
+          status: resp.status,
+          statusText: resp.statusText,
           hasAiSummary: !!result.aiSummary,
           hasSummary: !!result.summary,
-          hasError: !!result.error
+          hasError: !!result.error,
+          resultKeys: Object.keys(result)
         });
+
+        // Check if response indicates an error
+        if (!resp.ok || result.error) {
+          const errorMessage = result.aiSummary || result.error || `Request failed: ${resp.status} ${resp.statusText}`;
+          throw new Error(errorMessage);
+        }
 
         // Read aiSummary field (primary), fallback to summary for backwards compatibility
         const rawSummary =
           result.aiSummary ||
           result.summary ||
-          result.error ||
           "Summary not available. Please open the full article for details.";
 
         // Removes HTML Markup from Summary
         // Must keep for Plain Text Display
         const cleanSummary = String(rawSummary).replace(/<[^>]+>/g, "").trim();
 
-        if (cleanSummary.length === 0 || cleanSummary.startsWith("Error:")) {
-          summaryText.textContent = cleanSummary || "Unable to generate summary. Please try again later.";
-          summaryText.style.color = "#d32f2f";
-        } else {
-          summaryText.textContent = cleanSummary;
-          summaryText.style.color = "";
-          summaryDiv.dataset.loaded = "true";
-          summaryButton.textContent = "Hide Summary";
+        if (cleanSummary.length === 0) {
+          throw new Error("Received empty summary from server");
         }
+
+        // Success - display the summary
+        summaryText.textContent = cleanSummary;
+        summaryText.style.color = "";
+        summaryDiv.dataset.loaded = "true";
+        summaryButton.textContent = "Hide Summary";
       } catch (err) {
         console.error("[Article Loader] Error fetching summary:", err);
-        const errorMessage = err.message || "Sorry, we couldn't load a summary right now. Please try again later.";
+        console.error("[Article Loader] Error details:", {
+          message: err.message,
+          stack: err.stack,
+          name: err.name
+        });
+        
+        // Extract error message - prefer the detailed message from the API
+        let errorMessage = err.message || "Sorry, we couldn't load a summary right now. Please try again later.";
+        
+        // If error message starts with "Error:", remove the prefix for cleaner display
+        if (errorMessage.startsWith("Error: ")) {
+          errorMessage = errorMessage.substring(7);
+        }
+        
         summaryText.textContent = errorMessage;
         summaryText.style.color = "#d32f2f";
+        summaryText.style.fontStyle = "italic";
         // Don't mark as loaded if there was an error, so user can retry
         summaryDiv.dataset.loaded = "false";
+        summaryButton.textContent = "View AI Generated Summary";
       } finally {
         summaryButton.disabled = false;
       }

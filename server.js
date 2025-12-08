@@ -816,31 +816,61 @@ app.get('/api/guardian', async (req, res) => {
       } catch (error) {
         console.error('[Summarize] ========================================');
         console.error('[Summarize] ERROR in summarize endpoint');
+        console.error('[Summarize] Error type:', error.constructor.name);
         console.error('[Summarize] Error message:', error.message);
-        console.error('[Summarize] Error stack:', error.stack);
+        console.error('[Summarize] Error code:', error.code);
         if (error.response) {
           console.error('[Summarize] API response status:', error.response.status);
+          console.error('[Summarize] API response headers:', error.response.headers);
           console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
+          
+          // OpenRouter specific error handling
+          if (isOpenRouter && error.response.data) {
+            if (error.response.status === 401) {
+              console.error('[Summarize] OpenRouter: Authentication failed - check API key');
+            } else if (error.response.status === 402) {
+              console.error('[Summarize] OpenRouter: Insufficient credits');
+            } else if (error.response.status === 429) {
+              console.error('[Summarize] OpenRouter: Rate limit exceeded');
+            }
+          }
         }
         if (error.request) {
           console.error('[Summarize] Request was made but no response received');
-          console.error('[Summarize] Request config:', JSON.stringify({
-            url: error.config?.url,
-            method: error.config?.method,
-            headers: error.config?.headers ? Object.keys(error.config.headers) : []
-          }, null, 2));
+          console.error('[Summarize] Request URL:', error.config?.url);
+          console.error('[Summarize] Request method:', error.config?.method);
+          console.error('[Summarize] Request headers:', error.config?.headers ? Object.keys(error.config.headers) : []);
         }
         console.error('[Summarize] ========================================');
         
         // Extract detailed error message
         let errorMessage = 'Unable to generate summary. Please try again later.';
         if (error.response?.data) {
+          // OpenRouter error format
           if (error.response.data.error) {
-            errorMessage = error.response.data.error.message || error.response.data.error || errorMessage;
+            if (typeof error.response.data.error === 'string') {
+              errorMessage = error.response.data.error;
+            } else if (error.response.data.error.message) {
+              errorMessage = error.response.data.error.message;
+            } else {
+              errorMessage = JSON.stringify(error.response.data.error);
+            }
           } else if (error.response.data.message) {
             errorMessage = error.response.data.message;
           } else if (typeof error.response.data === 'string') {
             errorMessage = error.response.data;
+          } else {
+            // Try to extract any error information
+            errorMessage = JSON.stringify(error.response.data);
+          }
+          
+          // Add status code context
+          if (error.response.status === 401) {
+            errorMessage = `Authentication failed: ${errorMessage}. Please check your API key.`;
+          } else if (error.response.status === 402) {
+            errorMessage = `Insufficient credits: ${errorMessage}. Please add credits to your OpenRouter account.`;
+          } else if (error.response.status === 429) {
+            errorMessage = `Rate limit exceeded: ${errorMessage}. Please try again later.`;
           }
         } else if (error.message) {
           errorMessage = error.message;
@@ -848,7 +878,7 @@ app.get('/api/guardian', async (req, res) => {
         
         return res.status(500).json({ 
           error: 'Failed to generate summary',
-          aiSummary: `Error: ${errorMessage}`
+          aiSummary: errorMessage
         });
       }
     });
