@@ -35,6 +35,7 @@ const MOCK_MODE = !GUARDIAN_API_KEY;
 
 // OpenAI configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const LLM_API_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
 
 // Mock data for when no API key is provided (used by aggregate endpoint)
 const mockData = {
@@ -706,7 +707,7 @@ app.post('/api/summarize', async (req, res) => {
     }
 
     const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
+      LLM_API_URL,
       {
         model: 'gpt-3.5-turbo',
         messages: [

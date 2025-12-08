@@ -113,6 +113,7 @@ const MOCK_MODE = !GUARDIAN_API_KEY;
 
 // OpenAI configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const LLM_API_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
 
 // Mock data for when no API key is provided
 const mockData = {
@@ -726,7 +727,7 @@ app.get('/api/guardian', async (req, res) => {
         }
 
     // Call OpenAI API
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+    const response = await axios.post(LLM_API_URL, {
       model: 'gpt-3.5-turbo',
       messages: [
         {
