@@ -36,6 +36,10 @@ const MOCK_MODE = !GUARDIAN_API_KEY;
 // OpenAI configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const LLM_API_URL = process.env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-3.5-turbo';
+
+// Detect if using OpenRouter
+const isOpenRouter = LLM_API_URL.includes('openrouter.ai');
 
 // Mock data for when no API key is provided (used by aggregate endpoint)
 const mockData = {
@@ -713,12 +717,34 @@ app.post('/api/summarize', async (req, res) => {
     }
 
     console.log('[Summarize] Calling LLM API:', LLM_API_URL);
-    console.log('[Summarize] Using model: gpt-3.5-turbo');
+    console.log('[Summarize] Using model:', LLM_MODEL);
+    console.log('[Summarize] Is OpenRouter:', isOpenRouter);
+
+    // For OpenRouter, add provider prefix if not already present (e.g., "openai/gpt-4o-mini")
+    // For OpenAI, use the model directly
+    let modelToUse = LLM_MODEL;
+    if (isOpenRouter && !modelToUse.includes('/')) {
+      // If model doesn't have provider prefix, add "openai/" prefix
+      modelToUse = `openai/${modelToUse}`;
+      console.log('[Summarize] Added provider prefix to model:', modelToUse);
+    }
+
+    // Prepare headers
+    const headers = {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+
+    // OpenRouter recommends adding HTTP-Referer and X-Title headers (optional but helpful)
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'http://localhost:4000';
+      headers['X-Title'] = 'News Summarizer';
+    }
 
     const response = await axios.post(
       LLM_API_URL,
       {
-        model: 'gpt-3.5-turbo',
+        model: modelToUse,
         messages: [
           {
             role: 'system',
@@ -734,10 +760,7 @@ app.post('/api/summarize', async (req, res) => {
         temperature: 0.7
       },
       {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
+        headers: headers,
         timeout: 30000
       }
     );
@@ -783,11 +806,33 @@ app.post('/api/summarize', async (req, res) => {
       console.error('[Summarize] API response status:', error.response.status);
       console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
     }
+    if (error.request) {
+      console.error('[Summarize] Request was made but no response received');
+      console.error('[Summarize] Request config:', JSON.stringify({
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers ? Object.keys(error.config.headers) : []
+      }, null, 2));
+    }
     console.error('[Summarize] ========================================');
+    
+    // Extract detailed error message
+    let errorMessage = 'Unable to generate summary. Please try again later.';
+    if (error.response?.data) {
+      if (error.response.data.error) {
+        errorMessage = error.response.data.error.message || error.response.data.error || errorMessage;
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (typeof error.response.data === 'string') {
+        errorMessage = error.response.data;
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
     
     return res.status(500).json({ 
       error: 'Failed to generate summary',
-      aiSummary: `Error: ${error.response?.data?.error?.message || error.message || 'Unable to generate summary. Please try again later.'}`
+      aiSummary: `Error: ${errorMessage}`
     });
   }
 });
