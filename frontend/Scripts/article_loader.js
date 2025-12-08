@@ -285,7 +285,7 @@
         return;
       }
 
-      // First Time Click; Festch Summary from Backend
+      // First Time Click; Fetch Summary from Backend
       summaryDiv.style.display = "block";
       summaryText.textContent = "Loading summary...";
       summaryButton.disabled = true;
@@ -305,10 +305,19 @@
         const textForSummary =
           (group.fullArticleText && String(group.fullArticleText)) ||
           (group.summary && String(group.summary)) ||
+          (group.aiSummary && String(group.aiSummary)) ||
           articleForSummary.description ||
           articleForSummary.trailText ||
           articleForSummary.snippet ||
+          articleForSummary.content ||
           "";
+
+        console.log("[Article Loader] Requesting summary for:", titleForSummary);
+        console.log("[Article Loader] Text length:", textForSummary.length);
+
+        if (!textForSummary || textForSummary.trim().length === 0) {
+          throw new Error("No article text available for summarization");
+        }
 
         const resp = await fetch(summarizeUrl, {
           method: "POST",
@@ -319,28 +328,49 @@
           }),
         });
 
+        console.log("[Article Loader] Summary response status:", resp.status, resp.statusText);
+
         if (!resp.ok) {
+          const errorData = await resp.json().catch(() => ({}));
           throw new Error(
-            `Summary request failed: ${resp.status} ${resp.statusText}`
+            errorData.error || `Summary request failed: ${resp.status} ${resp.statusText}`
           );
         }
 
         const result = await resp.json();
+        console.log("[Article Loader] Summary response received:", {
+          hasAiSummary: !!result.aiSummary,
+          hasSummary: !!result.summary,
+          hasError: !!result.error
+        });
+
+        // Read aiSummary field (primary), fallback to summary for backwards compatibility
+        const rawSummary =
+          result.aiSummary ||
+          result.summary ||
+          result.error ||
+          "Summary not available. Please open the full article for details.";
 
         // Removes HTML Markup from Summary
         // Must keep for Plain Text Display
-        const rawSummary =
-          result.summary ||
-          "Summary not available. Please open the full article for details.";
-        const cleanSummary = rawSummary.replace(/<[^>]+>/g, "");
+        const cleanSummary = String(rawSummary).replace(/<[^>]+>/g, "").trim();
 
-        summaryText.textContent = cleanSummary;
-        summaryDiv.dataset.loaded = "true";
-        summaryButton.textContent = "Hide Summary";
+        if (cleanSummary.length === 0 || cleanSummary.startsWith("Error:")) {
+          summaryText.textContent = cleanSummary || "Unable to generate summary. Please try again later.";
+          summaryText.style.color = "#d32f2f";
+        } else {
+          summaryText.textContent = cleanSummary;
+          summaryText.style.color = "";
+          summaryDiv.dataset.loaded = "true";
+          summaryButton.textContent = "Hide Summary";
+        }
       } catch (err) {
         console.error("[Article Loader] Error fetching summary:", err);
-        summaryText.textContent =
-          "Sorry, we couldn't load a summary right now. Please try again later.";
+        const errorMessage = err.message || "Sorry, we couldn't load a summary right now. Please try again later.";
+        summaryText.textContent = errorMessage;
+        summaryText.style.color = "#d32f2f";
+        // Don't mark as loaded if there was an error, so user can retry
+        summaryDiv.dataset.loaded = "false";
       } finally {
         summaryButton.disabled = false;
       }

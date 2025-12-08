@@ -177,7 +177,8 @@ const API_BASE = (function () {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'story-summary';
 
-    let fullSummary = group.summary;
+    // Check for aiSummary first (new field name), then fallback to summary (for backwards compatibility)
+    let fullSummary = group.aiSummary || group.summary;
     if (!fullSummary || fullSummary.trim().length === 0) {
       const summaryParts = [];
       if (group.articles && group.articles.length > 0) {

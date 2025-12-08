@@ -119,7 +119,8 @@ Return ONLY valid JSON with this exact shape:
     return {
       groupId: group.groupId,
       groupTitle,
-      summary
+      summary, // Keep for backwards compatibility
+      aiSummary: summary // New consistent field name
     };
 
   } catch (err) {
@@ -176,7 +177,8 @@ function generateBasicSummary(group) {
   return {
     groupId: group.groupId || 'unknown-group',
     groupTitle,
-    summary
+    summary, // Keep for backwards compatibility
+    aiSummary: summary // New consistent field name
   };
 }
 

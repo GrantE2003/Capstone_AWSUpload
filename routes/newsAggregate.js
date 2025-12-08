@@ -439,7 +439,8 @@ router.get('/aggregate', async (req, res) => {
           summarizedGroups.push({
             groupId: result.value.groupId,
             groupTitle: groupTitle,
-            summary: summary,
+            summary: summary, // Keep for backwards compatibility
+            aiSummary: summary, // New consistent field name
             articles: batch[index].articles,
             sourceCount: sourceCount,
             sources: uniqueSources
@@ -479,7 +480,8 @@ router.get('/aggregate', async (req, res) => {
           summarizedGroups.push({
             groupId: batch[index].groupId,
             groupTitle: groupTitle,
-            summary: fallbackSummary,
+            summary: fallbackSummary, // Keep for backwards compatibility
+            aiSummary: fallbackSummary, // New consistent field name
             articles: batch[index].articles,
             sourceCount: sourceCount,
             sources: uniqueSources

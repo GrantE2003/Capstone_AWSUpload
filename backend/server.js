@@ -686,25 +686,34 @@ app.post('/api/summarize', async (req, res) => {
   try {
     const { text, title } = req.body;
 
-    if (!text || !title) {
-      return res.status(400).json({ error: 'Text and title are required' });
-    }
+    console.log('[Summarize] ========================================');
+    console.log('[Summarize] Received summarize request');
+    console.log('[Summarize] Title:', title);
+    console.log('[Summarize] Text length:', text ? text.length : 0);
+    console.log('[Summarize] Text preview:', text ? text.substring(0, 200) + '...' : 'NO TEXT');
 
-    console.log('AI Input - Title:', title);
-    console.log('AI Input - Text length:', text.length);
-    console.log('AI Input - Text preview:', text.substring(0, 200) + '...');
+    if (!text || !title) {
+      console.error('[Summarize] Missing required fields - text:', !!text, 'title:', !!title);
+      return res.status(400).json({ 
+        error: 'Text and title are required',
+        aiSummary: 'Error: Missing required article information.'
+      });
+    }
 
     // Fallback summary if no OpenAI key configured
     if (!OPENAI_API_KEY || OPENAI_API_KEY === 'your_openai_api_key_here') {
+      console.warn('[Summarize] No valid API key - using fallback summary');
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
       const keySentences = sentences.slice(0, 3);
-      const summary = keySentences.join('. ').trim() + '.';
+      const fallbackSummary = keySentences.join('. ').trim() + '.';
 
       return res.json({
-        summary:
-          summary || 'Summary not available. Please read the full article for details.'
+        aiSummary: fallbackSummary || 'Summary not available. Please read the full article for details.'
       });
     }
+
+    console.log('[Summarize] Calling LLM API:', LLM_API_URL);
+    console.log('[Summarize] Using model: gpt-3.5-turbo');
 
     const response = await axios.post(
       LLM_API_URL,
@@ -728,15 +737,58 @@ app.post('/api/summarize', async (req, res) => {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       }
     );
 
-    const summary = response.data.choices[0].message.content;
-    res.json({ summary });
+    console.log('[Summarize] API response status:', response.status);
+    console.log('[Summarize] Response structure:', {
+      hasData: !!response.data,
+      hasChoices: !!response.data?.choices,
+      choicesLength: response.data?.choices?.length || 0
+    });
+
+    // Extract summary from response (handle both OpenAI and OpenRouter formats)
+    let aiSummary = null;
+    if (response.data && response.data.choices && response.data.choices.length > 0) {
+      const firstChoice = response.data.choices[0];
+      if (firstChoice.message && firstChoice.message.content) {
+        aiSummary = firstChoice.message.content.trim();
+        console.log('[Summarize] Successfully extracted summary, length:', aiSummary.length);
+      } else {
+        console.error('[Summarize] Response missing message.content:', JSON.stringify(firstChoice, null, 2));
+      }
+    } else {
+      console.error('[Summarize] Unexpected response structure:', JSON.stringify(response.data, null, 2));
+    }
+
+    if (!aiSummary || aiSummary.length === 0) {
+      console.error('[Summarize] Failed to extract valid summary from API response');
+      return res.status(500).json({ 
+        error: 'Failed to extract summary from API response',
+        aiSummary: 'Error: The AI service returned an invalid response. Please try again later.'
+      });
+    }
+
+    console.log('[Summarize] Returning summary to frontend, length:', aiSummary.length);
+    return res.json({ aiSummary });
+
   } catch (error) {
-    console.error('OpenAI API error:', error.message);
-    res.status(500).json({ error: 'Failed to generate summary' });
+    console.error('[Summarize] ========================================');
+    console.error('[Summarize] ERROR in summarize endpoint');
+    console.error('[Summarize] Error message:', error.message);
+    console.error('[Summarize] Error stack:', error.stack);
+    if (error.response) {
+      console.error('[Summarize] API response status:', error.response.status);
+      console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.error('[Summarize] ========================================');
+    
+    return res.status(500).json({ 
+      error: 'Failed to generate summary',
+      aiSummary: `Error: ${error.response?.data?.error?.message || error.message || 'Unable to generate summary. Please try again later.'}`
+    });
   }
 });
 
