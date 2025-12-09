@@ -1,0 +1,998 @@
+const express = require('express');
+const router = express.Router();
+
+const { fetchGuardianArticles } = require('../services/guardianClient');
+const { fetchGdeltArticles } = require('../services/gdeltClient');
+const { fetchCurrentsArticles } = require('../services/currentsClient');
+const { fetchMediastackArticles } = require('../services/mediastackClient');
+const { groupSimilarArticles } = require('../services/articleGrouper');
+const { summarizeArticleGroup, generateNeutralTitle } = require('../services/llmSummarizer');
+
+// How many story groups we want to return per page
+const MAX_GROUPS_PER_PAGE = 18;
+
+// CRITICAL: Log router initialization
+console.log('[NewsAggregate Router] Router initialized');
+console.log('[NewsAggregate Router] Will register: GET /aggregate');
+console.log('[NewsAggregate Router] Full path will be: GET /api/news/aggregate');
+
+// Test route to verify router is mounted correctly
+// GET /api/news/test - Returns simple JSON to verify routing works
+router.get('/test', (req, res) => {
+  res.json({
+    message: 'News aggregate router is working!',
+    path: '/api/news/test',
+    aggregateRoute: '/api/news/aggregate',
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
+ * Aggregation endpoint that:
+ * 1. Fetches articles from Guardian, GDELT, and Currents in parallel
+ * 2. Normalizes them to common shape
+ * 3. Groups similar articles
+ * 4. Generates summaries and comparisons for each group
+ *
+ * CRITICAL PRODUCTION ROUTE:
+ * GET /api/news/aggregate?category=business&country=US
+ *
+ * This route MUST exist exactly as /api/news/aggregate
+ * Frontend calls: https://www.4970capstone-mss.com/api/news/aggregate?category=business&country=US
+ */
+router.get('/aggregate', async (req, res) => {
+  try {
+    // Log incoming request for debugging
+    console.log('[Aggregate] ========================================');
+    console.log('[Aggregate] Incoming request to /api/news/aggregate');
+    console.log('[Aggregate] Method:', req.method);
+    console.log('[Aggregate] URL:', req.originalUrl);
+    console.log('[Aggregate] Query params:', req.query);
+    console.log('[Aggregate] ========================================');
+
+    const { query, country, category, page } = req.query;
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const isSearch = query && query.trim().length > 0;
+    const isCategory = category && category.trim().length > 0 && !isSearch;
+
+    console.log('[Aggregate] Request:', {
+      query: query || '(none)',
+      country: country || '(none)',
+      category: category || '(none)',
+      page: pageNum,
+      isSearch,
+      isCategory
+    });
+
+    // CRITICAL: If a search query is provided, it MUST be used - don't fall back to category
+    if (isSearch) {
+      console.log('[Aggregate] SEARCH MODE: Using search query, ignoring category if present');
+    } else if (isCategory) {
+      console.log('[Aggregate] CATEGORY MODE: Using category, no search query');
+    } else {
+      console.warn('[Aggregate] WARNING: No search query or category provided - may return empty results');
+    }
+
+    // Parse query parameters - prioritize search query over category
+    const newsQuery = {
+      query: isSearch ? query.trim() : '', // Only use query if it's a search
+      country: country || undefined,
+      category: isSearch ? undefined : (category || undefined) // Don't use category if search is active
+    };
+
+    const warnings = [];
+
+    // Fetch from all sources in parallel
+    console.log('[Aggregate] Fetching from all sources (Guardian, GDELT, Currents, Mediastack)...');
+    console.log('[Aggregate] Query:', query || category || 'default');
+    console.log('[Aggregate] newsQuery object:', JSON.stringify(newsQuery, null, 2));
+
+    const [guardianResults, gdeltResults, currentsResults, mediastackResults] = await Promise.allSettled([
+      fetchGuardianArticles(newsQuery).catch(err => {
+        console.error('[Aggregate] Guardian API FAILED:', err.message);
+        console.error('[Aggregate] Guardian error stack:', err.stack);
+        if (err.response) {
+          console.error('[Aggregate] Guardian response status:', err.response.status);
+          console.error('[Aggregate] Guardian response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        if (err.request) {
+          console.error('[Aggregate] Guardian request made but no response received');
+        }
+        warnings.push(`Guardian API: ${err.message}`);
+        return [];
+      }),
+      fetchGdeltArticles(newsQuery).catch(err => {
+        console.error('[Aggregate] GDELT API FAILED:', err.message);
+        if (err.response) {
+          console.error('[Aggregate] GDELT response status:', err.response.status);
+        }
+        warnings.push(`GDELT API: ${err.message}`);
+        return [];
+      }),
+      fetchCurrentsArticles(newsQuery).catch(err => {
+        console.error('[Aggregate] Currents API FAILED:', err.message);
+        console.error('[Aggregate] Currents error stack:', err.stack);
+        if (err.response) {
+          console.error('[Aggregate] Currents response status:', err.response.status);
+          console.error('[Aggregate] Currents response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        if (err.request) {
+          console.error('[Aggregate] Currents request made but no response received');
+        }
+        warnings.push(`Currents API: ${err.message}`);
+        return [];
+      }),
+      fetchMediastackArticles(newsQuery).catch(err => {
+        console.error('[Aggregate] Mediastack API FAILED:', err.message);
+        if (err.response) {
+          console.error('[Aggregate] Mediastack response status:', err.response.status);
+          console.error('[Aggregate] Mediastack response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        warnings.push(`Mediastack API: ${err.message}`);
+        return [];
+      })
+    ]);
+    
+    // Log Promise.allSettled results
+    console.log('[Aggregate] Promise.allSettled results:');
+    console.log('  Guardian status:', guardianResults.status, guardianResults.status === 'rejected' ? guardianResults.reason?.message : '');
+    console.log('  GDELT status:', gdeltResults.status, gdeltResults.status === 'rejected' ? gdeltResults.reason?.message : '');
+    console.log('  Currents status:', currentsResults.status, currentsResults.status === 'rejected' ? currentsResults.reason?.message : '');
+    console.log('  Mediastack status:', mediastackResults.status, mediastackResults.status === 'rejected' ? mediastackResults.reason?.message : '');
+
+    // Extract results (handle Promise.allSettled structure)
+    const guardianArticles =
+      guardianResults.status === 'fulfilled' ? guardianResults.value : [];
+    const gdeltArticles =
+      gdeltResults.status === 'fulfilled' ? gdeltResults.value : [];
+    const currentsArticles =
+      currentsResults.status === 'fulfilled' ? currentsResults.value : [];
+    const mediastackArticles =
+      mediastackResults.status === 'fulfilled' ? mediastackResults.value : [];
+
+    // Verify results are arrays
+    if (!Array.isArray(guardianArticles)) {
+      console.warn('[Aggregate] Guardian returned non-array:', typeof guardianArticles);
+    }
+    if (!Array.isArray(gdeltArticles)) {
+      console.warn('[Aggregate] GDELT returned non-array:', typeof gdeltArticles);
+    }
+    if (!Array.isArray(currentsArticles)) {
+      console.warn('[Aggregate] Currents returned non-array:', typeof currentsArticles);
+    }
+    if (!Array.isArray(mediastackArticles)) {
+      console.warn('[Aggregate] Mediastack returned non-array:', typeof mediastackArticles);
+    }
+
+    // Log results from each source for verification
+    console.log('\n[Aggregate] Articles fetched from each source (already normalized):');
+    const guardianCount = Array.isArray(guardianArticles) ? guardianArticles.length : 0;
+    const gdeltCount = Array.isArray(gdeltArticles) ? gdeltArticles.length : 0;
+    const currentsCount = Array.isArray(currentsArticles) ? currentsArticles.length : 0;
+    const mediastackCount = Array.isArray(mediastackArticles) ? mediastackArticles.length : 0;
+
+    console.log(
+      `   Guardian: ${guardianCount} articles ${guardianCount === 0 ? '(NONE!)' : ''}`
+    );
+    console.log(`   GDELT: ${gdeltCount} articles ${gdeltCount === 0 ? '(NONE!)' : ''}`);
+    console.log(
+      `   Currents: ${currentsCount} articles ${currentsCount === 0 ? '(NONE!)' : ''}`
+    );
+    console.log(
+      `   Mediastack: ${mediastackCount} articles ${mediastackCount === 0 ? '(NONE!)' : ''}`
+    );
+
+    const totalArticles = guardianCount + gdeltCount + currentsCount + mediastackCount;
+    console.log(`   Total: ${totalArticles} articles from all sources\n`);
+    
+    // Warn if one source is dominating
+    const maxCount = Math.max(guardianCount, gdeltCount, currentsCount);
+    if (maxCount > 0) {
+      const maxPercentage = (maxCount / totalArticles) * 100;
+      if (maxPercentage > 70) {
+        console.warn(`[Aggregate] WARNING: One source is dominating (${maxPercentage.toFixed(1)}% of articles). Source balancing will help.`);
+      }
+    }
+
+    // Note: We don't warn about sources returning 0 articles as this is normal behavior
+    // Some sources may not have articles for every query, and that's okay
+    
+    // Log which sources succeeded
+    const successfulSources = [];
+    if (guardianCount > 0) successfulSources.push(`Guardian (${guardianCount})`);
+    if (gdeltCount > 0) successfulSources.push(`GDELT (${gdeltCount})`);
+    if (currentsCount > 0) successfulSources.push(`Currents (${currentsCount})`);
+    if (mediastackCount > 0) successfulSources.push(`Mediastack (${mediastackCount})`);
+    
+    if (successfulSources.length > 0) {
+      console.log(`[Aggregate] Successfully fetched articles from: ${successfulSources.join(', ')}`);
+    }
+
+    // Critical: If ALL sources failed, we have a problem
+    if (totalArticles === 0) {
+      console.error('[Aggregate] CRITICAL: ALL sources returned 0 articles!');
+      console.error(
+        '[Aggregate] This indicates a serious problem with API keys or network connectivity.'
+      );
+    }
+
+    // Balance articles from each source to prevent one source from dominating
+    // GDELT is lowest priority - take fewer articles from it
+    const MAX_ARTICLES_GUARDIAN = 30;
+    const MAX_ARTICLES_CURRENTS = 30;
+    const MAX_ARTICLES_MEDIASTACK = 30;
+    const MAX_ARTICLES_GDELT = 15; // Lower priority - fewer articles
+    
+    const balancedGuardian = Array.isArray(guardianArticles) 
+      ? guardianArticles.slice(0, MAX_ARTICLES_GUARDIAN) 
+      : [];
+    const balancedGdelt = Array.isArray(gdeltArticles) 
+      ? gdeltArticles.slice(0, MAX_ARTICLES_GDELT) 
+      : [];
+    const balancedCurrents = Array.isArray(currentsArticles) 
+      ? currentsArticles.slice(0, MAX_ARTICLES_CURRENTS) 
+      : [];
+    const balancedMediastack = Array.isArray(mediastackArticles)
+      ? mediastackArticles.slice(0, MAX_ARTICLES_MEDIASTACK)
+      : [];
+
+    console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}, Mediastack: ${balancedMediastack.length}`);
+
+    // Combine all normalized articles into ONE pool before grouping
+    // Prioritize Guardian, Currents, and Mediastack over GDELT in interleaving
+    const allArticles = [];
+    const maxLength = Math.max(balancedGuardian.length, balancedCurrents.length, balancedMediastack.length, balancedGdelt.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+      // Priority order: Guardian, Currents, Mediastack, then GDELT
+      if (i < balancedGuardian.length) allArticles.push(balancedGuardian[i]);
+      if (i < balancedCurrents.length) allArticles.push(balancedCurrents[i]);
+      if (i < balancedMediastack.length) allArticles.push(balancedMediastack[i]);
+      if (i < balancedGdelt.length) allArticles.push(balancedGdelt[i]);
+    }
+
+    // Add source field to each article for grouping logic
+    const articlesWithSource = allArticles.map(article => ({
+      ...article,
+      source:
+        article.sourceName === 'Guardian'
+          ? 'guardian'
+          : article.sourceName === 'GDELT'
+          ? 'gdelt'
+          : article.sourceName === 'Currents'
+          ? 'currents'
+          : article.sourceName === 'Mediastack'
+          ? 'mediastack'
+          : 'unknown'
+    }));
+
+    console.log('[Aggregate] Combined articles by source:');
+    const guardianCountCombined = articlesWithSource.filter(a => a.source === 'guardian')
+      .length;
+    const gdeltCountCombined = articlesWithSource.filter(a => a.source === 'gdelt').length;
+    const currentsCountCombined = articlesWithSource.filter(a => a.source === 'currents')
+      .length;
+    const mediastackCountCombined = articlesWithSource.filter(a => a.source === 'mediastack')
+      .length;
+    console.log(`   Guardian: ${guardianCountCombined} articles`);
+    console.log(`   GDELT: ${gdeltCountCombined} articles`);
+    console.log(`   Currents: ${currentsCountCombined} articles`);
+    console.log(`   Mediastack: ${mediastackCountCombined} articles`);
+    console.log(`   Total: ${articlesWithSource.length} articles\n`);
+
+    const sourceBreakdown = {
+      guardian: guardianCountCombined,
+      gdelt: gdeltCountCombined,
+      currents: currentsCountCombined,
+      mediastack: mediastackCountCombined
+    };
+    console.log('[Aggregate] Source verification:', sourceBreakdown);
+
+    const nonGuardianCount = gdeltCountCombined + currentsCountCombined + mediastackCountCombined;
+    if (nonGuardianCount === 0 && articlesWithSource.length > 0) {
+      console.warn(
+        '[Aggregate] WARNING: Only Guardian articles found. Other sources may not be working.'
+      );
+    } else {
+      console.log(
+        `[Aggregate] Non-Guardian articles: ${nonGuardianCount} (GDELT: ${gdeltCountCombined}, Currents: ${currentsCountCombined}, Mediastack: ${mediastackCountCombined})`
+      );
+    }
+
+    if (articlesWithSource.length === 0) {
+      // For search queries, return a clear "No articles found" message
+      if (isSearch) {
+        console.log('[Aggregate] No articles found from any source for search query:', query);
+        return res.json({
+          query: query || '',
+          country: country || undefined,
+          category: category || undefined,
+          groupedArticles: [],
+          rawArticles: [],
+          warnings: ['No articles found for this topic.'],
+          noResults: true
+        });
+      }
+      console.log('[Aggregate] No articles found from any source for category:', category);
+      return res.json({
+        query: query || '',
+        country: country || undefined,
+        category: category || undefined,
+        groupedArticles: [],
+        rawArticles: [],
+        warnings: warnings.length > 0 ? warnings : ['No articles found from any source.']
+      });
+    }
+    
+    console.log('[Aggregate] Proceeding with', articlesWithSource.length, 'articles to group and summarize');
+
+    // Group similar articles ACROSS ALL SOURCES
+    // Use lower threshold for search queries to group articles with similar titles more aggressively
+    // For search, we want to group articles about the same topic even if they have slightly different wording
+    // But don't make it too aggressive - we still want some groups to be created
+    const similarityThreshold = isSearch ? 0.20 : 0.25; // Slightly more aggressive grouping for search queries
+    console.log('[Aggregate] Grouping', articlesWithSource.length, 'articles with similarity threshold:', similarityThreshold);
+    const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
+    
+    // CRITICAL: Ensure grouping actually happened
+    if (groups.length === articlesWithSource.length) {
+      console.warn('[Aggregate] WARNING: No articles were grouped! All articles are in separate groups.');
+      console.warn('[Aggregate] This suggests the similarity threshold may be too high or grouping logic needs adjustment.');
+    } else {
+      const groupedCount = groups.reduce((sum, g) => sum + g.articles.length, 0);
+      const avgGroupSize = groupedCount / groups.length;
+      console.log(`[Aggregate] Grouping successful: ${articlesWithSource.length} articles -> ${groups.length} groups (avg ${avgGroupSize.toFixed(1)} articles per group)`);
+    }
+
+    console.log(
+      `\n[Aggregate] Grouped ${articlesWithSource.length} articles into ${groups.length} groups (cross-source grouping)`
+    );
+
+    // Log group composition by source to verify cross-source grouping
+    groups.forEach((group, idx) => {
+      const sources = {};
+      group.articles.forEach(article => {
+        sources[article.source] = (sources[article.source] || 0) + 1;
+      });
+      const sourceStr = Object.entries(sources)
+        .map(([s, c]) => `${s}:${c}`)
+        .join(', ');
+      console.log(
+        `   Group ${idx + 1}: ${group.articles.length} articles from ${
+          Object.keys(sources).length
+        } source(s) [${sourceStr}]`
+      );
+    });
+    console.log('');
+
+    // Filter groups to remove duplicates and ensure quality
+    const filteredGroups = groups.filter(group => {
+      // Filter out groups that are all GDELT with no valid descriptions
+      const allGdelt = group.articles.every(a => {
+        const source = (a.source || a.sourceName || '').toLowerCase();
+        return source === 'gdelt';
+      });
+      
+      if (allGdelt) {
+        // Check if all GDELT articles have "No description available"
+        const allNoDescription = group.articles.every(a => {
+          const desc = (a.description || '').trim();
+          return !desc || desc === 'No description available.' || desc.length < 50;
+        });
+        
+        if (allNoDescription) {
+          console.log(
+            `[Aggregate] Filtering out group ${group.groupId} - all GDELT articles have no valid descriptions`
+          );
+          return false;
+        }
+      }
+      
+      if (group.articles.length > 1) {
+        const normalizedTitles = group.articles.map(a => {
+          const title = (a.title || '').toLowerCase().trim();
+          return title
+            .replace(/^(breaking|exclusive|update|live):\s*/i, '')
+            .replace(
+              /\s*-\s*(the guardian|guardian|gdelt|currents|reuters|ap|bbc).*$/i,
+              ''
+            )
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        });
+
+        const firstTitle = normalizedTitles[0];
+        const allIdentical = normalizedTitles.every(title => {
+          return title === firstTitle && title.length > 0;
+        });
+
+        if (allIdentical && firstTitle.length > 10) {
+          console.log(
+            `[Aggregate] Filtering out group ${group.groupId} - all ${group.articles.length} articles have identical normalized title: "${firstTitle.substring(
+              0,
+              50
+            )}..."`
+          );
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    console.log(
+      `[Aggregate] After filtering (identical-title only): ${filteredGroups.length} groups (removed ${
+        groups.length - filteredGroups.length
+      } groups with identical titles)`
+    );
+
+    // Helper function to count unique sources in a group
+    const getUniqueSourceCount = group => {
+      const sources = new Set(group.articles.map(a => a.source || a.sourceName));
+      return sources.size;
+    };
+
+    // Helper function to get the most recent date from a group
+    const getLatestDate = group => {
+      const dates = group.articles
+        .map(article => {
+          try {
+            return article.publishedAt ? new Date(article.publishedAt).getTime() : 0;
+          } catch {
+            return 0;
+          }
+        })
+        .filter(d => d > 0);
+      return dates.length > 0 ? Math.max(...dates) : 0;
+    };
+
+    // Helper function to calculate recency score (prioritize last 48 hours)
+    const getRecencyScore = group => {
+      const latestDate = getLatestDate(group);
+      if (latestDate === 0) return 0;
+
+      const now = Date.now();
+      const hoursAgo = (now - latestDate) / (1000 * 60 * 60);
+
+      if (hoursAgo <= 24) return 1000;
+      if (hoursAgo <= 48) return 500;
+      return Math.max(0, 500 - (hoursAgo - 48) * 10);
+    };
+
+    // Helper to get source priority (lower number = higher priority)
+    const getSourcePriority = (group) => {
+      const sources = new Set(group.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
+      if (sources.has('guardian') && !sources.has('gdelt')) return 1; // Guardian-only or Guardian+others
+      if (sources.has('currents') && !sources.has('gdelt')) return 2; // Currents-only
+      if (sources.has('mediastack') && !sources.has('gdelt')) return 2; // Mediastack-only (same priority as Currents)
+      if (sources.has('gdelt') && !sources.has('guardian') && !sources.has('currents') && !sources.has('mediastack')) return 4; // GDELT-only (lowest)
+      if (sources.has('guardian') || sources.has('currents') || sources.has('mediastack')) return 3; // Mixed with Guardian/Currents/Mediastack
+      return 5; // Unknown
+    };
+
+    // Sort groups with priority: multi-source first, then source quality (Guardian > Currents > GDELT), then recency
+    filteredGroups.sort((a, b) => {
+      const aSourceCount = getUniqueSourceCount(a);
+      const bSourceCount = getUniqueSourceCount(b);
+
+      const aIsMultiSource = aSourceCount >= 2;
+      const bIsMultiSource = bSourceCount >= 2;
+
+      // Prioritize groups with more sources (3 > 2 > 1)
+      if (aSourceCount !== bSourceCount) {
+        return bSourceCount - aSourceCount;
+      }
+
+      // If same source count, prioritize multi-source over single-source
+      if (aIsMultiSource && !bIsMultiSource) return -1;
+      if (!aIsMultiSource && bIsMultiSource) return 1;
+
+      // If same source count and both single-source or both multi-source, prioritize by source quality
+      const aSourcePriority = getSourcePriority(a);
+      const bSourcePriority = getSourcePriority(b);
+      if (aSourcePriority !== bSourcePriority) {
+        return aSourcePriority - bSourcePriority; // Lower priority number = higher quality
+      }
+
+      const aRecency = getRecencyScore(a);
+      const bRecency = getRecencyScore(b);
+
+      if (aRecency !== bRecency) {
+        return bRecency - aRecency;
+      }
+
+      const aDate = getLatestDate(a);
+      const bDate = getLatestDate(b);
+      return bDate - aDate;
+    });
+
+    const multiSourceGroups = filteredGroups.filter(g => getUniqueSourceCount(g) >= 2);
+    const singleSourceGroups = filteredGroups.filter(g => getUniqueSourceCount(g) < 2);
+
+    console.log(
+      `[Aggregate] After filtering: ${multiSourceGroups.length} multi-source groups, ${singleSourceGroups.length} single-source groups`
+    );
+
+    // Interleave single-source groups by source to ensure diversity on each page
+    // This prevents all groups from one source from appearing on the same page
+    const interleavedSingleSourceGroups = [];
+    if (singleSourceGroups.length > 0) {
+      // Helper to get the primary source of a single-source group
+      const getGroupSource = (group) => {
+        const sources = group.articles.map(a => a.source || a.sourceName || 'unknown');
+        return sources[0]?.toLowerCase() || 'unknown';
+      };
+
+      // Separate single-source groups by their source
+      const groupsBySource = {};
+      singleSourceGroups.forEach(group => {
+        const source = getGroupSource(group);
+        if (!groupsBySource[source]) {
+          groupsBySource[source] = [];
+        }
+        groupsBySource[source].push(group);
+      });
+
+      // Interleave groups from different sources with priority: Guardian > Currents > Mediastack > GDELT
+      // Sort source keys by priority (guardian first, currents second, mediastack third, gdelt last)
+      const sourcePriority = ['guardian', 'currents', 'mediastack', 'gdelt'];
+      const sourceKeys = Object.keys(groupsBySource).sort((a, b) => {
+        const aPriority = sourcePriority.indexOf(a.toLowerCase());
+        const bPriority = sourcePriority.indexOf(b.toLowerCase());
+        // If not in priority list, put at end
+        if (aPriority === -1 && bPriority === -1) return 0;
+        if (aPriority === -1) return 1;
+        if (bPriority === -1) return -1;
+        return aPriority - bPriority;
+      });
+      
+      let maxLength = Math.max(...Object.values(groupsBySource).map(arr => arr.length));
+      
+      for (let i = 0; i < maxLength; i++) {
+        for (const sourceKey of sourceKeys) {
+          if (i < groupsBySource[sourceKey].length) {
+            interleavedSingleSourceGroups.push(groupsBySource[sourceKey][i]);
+          }
+        }
+      }
+
+      console.log(`[Aggregate] Interleaved ${interleavedSingleSourceGroups.length} single-source groups from ${sourceKeys.length} sources`);
+    }
+
+    // Prioritize multi-source groups, but ensure source diversity
+    // Summarize enough groups to fill multiple pages to ensure source diversity across pages
+    const GROUPS_TO_SUMMARIZE = Math.min(MAX_GROUPS_PER_PAGE * 3, filteredGroups.length); // Summarize up to 3 pages worth
+    
+    let groupsToSummarize = [];
+
+    if (multiSourceGroups.length >= GROUPS_TO_SUMMARIZE) {
+      // Plenty of multi-source groups, take top N (already sorted by recency)
+      groupsToSummarize = multiSourceGroups.slice(0, GROUPS_TO_SUMMARIZE);
+      console.log(
+        `[Aggregate] Using ${groupsToSummarize.length} multi-source groups (core functionality working)`
+      );
+    } else if (multiSourceGroups.length > 0) {
+      // Some multi-source groups, combine with interleaved single-source groups
+      const remainingSlots = GROUPS_TO_SUMMARIZE - multiSourceGroups.length;
+      groupsToSummarize = [
+        ...multiSourceGroups,
+        ...interleavedSingleSourceGroups.slice(0, remainingSlots)
+      ];
+      console.log(
+        `[Aggregate] Using ${multiSourceGroups.length} multi-source + ${
+          groupsToSummarize.length - multiSourceGroups.length
+        } interleaved single-source groups (total: ${groupsToSummarize.length})`
+      );
+    } else if (interleavedSingleSourceGroups.length > 0) {
+      // No multi-source groups, use interleaved single-source (ensures source diversity)
+      groupsToSummarize = interleavedSingleSourceGroups.slice(0, GROUPS_TO_SUMMARIZE);
+      console.warn(
+        `[Aggregate] WARNING: No multi-source groups found. Using ${groupsToSummarize.length} interleaved single-source groups as fallback.`
+      );
+    } else {
+      groupsToSummarize = [];
+      console.warn('[Aggregate] WARNING: No groups created at all!');
+      console.warn('[Aggregate] This might indicate an issue with article grouping or all articles were filtered out');
+      console.warn('[Aggregate] Raw articles available:', articlesWithSource.length);
+    }
+    
+    // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
+    // GDELT has much lower limits since it produces worst summaries
+    // For search, ensure Guardian, Currents, and Mediastack are prioritized
+    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_MEDIASTACK = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_GDELT = Math.ceil(GROUPS_TO_SUMMARIZE * 0.15); // 15% max (lowest priority, reduced)
+    
+    const sourceGroupCounts = {};
+    const diversifiedGroups = [];
+    
+    // First pass: Add all multi-source groups and Guardian/Currents/Mediastack single-source groups
+    for (const group of groupsToSummarize) {
+      const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
+      const sourceCount = getUniqueSourceCount(group);
+      
+      // Multi-source groups always included (unless all GDELT with no descriptions)
+      if (sourceCount >= 2) {
+        // Check if it's a multi-source group but all are GDELT with no descriptions
+        const allGdeltNoDesc = group.articles.every(a => {
+          const source = (a.source || a.sourceName || '').toLowerCase();
+          const desc = (a.description || '').trim();
+          return source === 'gdelt' && (!desc || desc === 'No description available.' || desc.length < 50);
+        });
+        
+        if (!allGdeltNoDesc) {
+          diversifiedGroups.push(group);
+        } else {
+          console.log(`[Aggregate] Skipping multi-source group - all GDELT with no valid descriptions`);
+        }
+      } else if (primarySource === 'guardian' || primarySource === 'currents' || primarySource === 'mediastack') {
+        // Guardian, Currents, and Mediastack single-source groups: prioritize these
+        let maxAllowed = MAX_GROUPS_GUARDIAN;
+        if (primarySource === 'currents') maxAllowed = MAX_GROUPS_CURRENTS;
+        if (primarySource === 'mediastack') maxAllowed = MAX_GROUPS_MEDIASTACK;
+        
+        const currentCount = sourceGroupCounts[primarySource] || 0;
+        if (currentCount < maxAllowed) {
+          diversifiedGroups.push(group);
+          sourceGroupCounts[primarySource] = currentCount + 1;
+        }
+      }
+    }
+    
+    // Second pass: Add GDELT groups only if we have room and they have valid descriptions
+    for (const group of groupsToSummarize) {
+      if (diversifiedGroups.includes(group)) continue; // Already added
+      
+      const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
+      const sourceCount = getUniqueSourceCount(group);
+      
+      if (sourceCount < 2 && primarySource === 'gdelt') {
+        const currentCount = sourceGroupCounts[primarySource] || 0;
+        if (currentCount < MAX_GROUPS_GDELT) {
+          // Additional check: don't include GDELT-only groups with no descriptions
+          const hasValidDescription = group.articles.some(a => {
+            const desc = (a.description || '').trim();
+            return desc && desc !== 'No description available.' && desc.length >= 50;
+          });
+          if (hasValidDescription) {
+            diversifiedGroups.push(group);
+            sourceGroupCounts[primarySource] = currentCount + 1;
+          } else {
+            console.log(`[Aggregate] Skipping GDELT group - no valid descriptions`);
+          }
+        }
+      }
+    }
+    
+    groupsToSummarize = diversifiedGroups.slice(0, GROUPS_TO_SUMMARIZE);
+    
+    // Log source distribution in groups to summarize
+    const sourceDistInSummary = {};
+    groupsToSummarize.forEach(g => {
+      const sources = g.articles.map(a => a.source || a.sourceName || 'unknown');
+      const uniqueSources = [...new Set(sources)];
+      uniqueSources.forEach(s => {
+        sourceDistInSummary[s] = (sourceDistInSummary[s] || 0) + 1;
+      });
+    });
+    console.log(`[Aggregate] Source distribution in groups to summarize:`, sourceDistInSummary);
+
+    // Summarize each group (with concurrency limit)
+    const MAX_CONCURRENT_SUMMARIES = 3;
+    const summarizedGroups = [];
+
+    for (let i = 0; i < groupsToSummarize.length; i += MAX_CONCURRENT_SUMMARIES) {
+      const batch = groupsToSummarize.slice(i, i + MAX_CONCURRENT_SUMMARIES);
+      const summaries = await Promise.allSettled(
+        batch.map(group => summarizeArticleGroup(group))
+      );
+
+      summaries.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          const summary = result.value.summary || 'Summary not available.';
+          let groupTitle = result.value.groupTitle;
+
+          // Always generate a neutral title from summary + metadata
+          groupTitle = generateNeutralTitle(
+            batch[index].articles[0]?.title,
+            batch[index].articles[0]?.description,
+            summary
+          );
+
+          const genericPatterns = [
+            'news story',
+            'story 1',
+            'story 2',
+            'story 3',
+            'latest news',
+            'news coverage',
+            'story from',
+            'covered this story',
+            'multiple sources'
+          ];
+          const isStillGeneric =
+            !groupTitle ||
+            genericPatterns.some(pattern =>
+              groupTitle.toLowerCase().includes(pattern)
+            ) ||
+            /^story\s+\d+$/i.test(groupTitle) ||
+            groupTitle.length < 10;
+
+          if (isStillGeneric && summary && summary.length > 20) {
+            const firstSentence = summary.split(/[.!?]/)[0].trim();
+            if (firstSentence.length > 15) {
+              const words = firstSentence.split(/\s+/).slice(0, 12).join(' ');
+              groupTitle = words.charAt(0).toUpperCase() + words.slice(1);
+            }
+          }
+
+          const uniqueSources = [
+            ...new Set(
+              batch[index].articles.map(
+                a => a.sourceName || a.source || 'Unknown'
+              )
+            )
+          ];
+          const sourceCount = uniqueSources.length;
+
+          // Only skip if summary is EXACTLY the title (less aggressive filtering)
+          const firstArticle = batch[index].articles[0];
+          const articleTitle = firstArticle?.title || groupTitle || '';
+          if (articleTitle && summary) {
+            const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            const normalizedSummary = summary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            
+            // Only skip if summary is EXACTLY the title (not just similar)
+            if (normalizedSummary === normalizedTitle && normalizedSummary.length < 100) {
+              console.log(`[Aggregate] Skipping group ${result.value.groupId} - summary is exactly the title`);
+              return; // Skip adding this group
+            }
+          }
+          
+          summarizedGroups.push({
+            groupId: result.value.groupId,
+            groupTitle: groupTitle,
+            summary: summary, // Keep for backwards compatibility
+            aiSummary: summary, // New consistent field name
+            articles: batch[index].articles,
+            sourceCount: sourceCount,
+            sources: uniqueSources
+          });
+        } else {
+          console.error(
+            '[Aggregate] Summarization failed for group:',
+            batch[index].groupId,
+            result.reason
+          );
+          warnings.push(`Failed to summarize group ${batch[index].groupId}`);
+
+          const firstArticle = batch[index].articles[0];
+          const articleTitles = batch[index].articles
+            .map(a => a.title)
+            .filter(Boolean)
+            .join('; ');
+          const fallbackSummary =
+            articleTitles ||
+            'Summary unavailable. Please review the articles below.';
+
+          const groupTitle = generateNeutralTitle(
+            firstArticle?.title,
+            firstArticle?.description,
+            fallbackSummary
+          );
+
+          const uniqueSources = [
+            ...new Set(
+              batch[index].articles.map(
+                a => a.sourceName || a.source || 'Unknown'
+              )
+            )
+          ];
+          const sourceCount = uniqueSources.length;
+
+          // Only skip if fallback summary is EXACTLY the title (less aggressive filtering)
+          const articleTitle = firstArticle?.title || groupTitle || '';
+          if (articleTitle && fallbackSummary) {
+            const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            const normalizedSummary = fallbackSummary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            
+            // Only skip if fallback summary is EXACTLY the title (not just similar)
+            if (normalizedSummary === normalizedTitle && normalizedSummary.length < 100) {
+              console.log(`[Aggregate] Skipping group ${batch[index].groupId} - fallback summary is exactly the title`);
+              return; // Skip adding this group
+            }
+          }
+
+          summarizedGroups.push({
+            groupId: batch[index].groupId,
+            groupTitle: groupTitle,
+            summary: fallbackSummary, // Keep for backwards compatibility
+            aiSummary: fallbackSummary, // New consistent field name
+            articles: batch[index].articles,
+            sourceCount: sourceCount,
+            sources: uniqueSources
+          });
+        }
+      });
+    }
+
+    // Log summary generation results
+    console.log(`[Aggregate] Generated ${summarizedGroups.length} summarized groups from ${groupsToSummarize.length} groups to summarize`);
+    
+    // If no groups were summarized but we have articles, log a warning
+    if (summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+      console.warn('[Aggregate] WARNING: No groups were successfully summarized, but we have', articlesWithSource.length, 'raw articles');
+      console.warn('[Aggregate] This might indicate an issue with the summarization process');
+      console.warn('[Aggregate] Frontend will display raw articles as fallback');
+      
+      // For search queries, if we have articles but no groups, create minimal groups from individual articles
+      // This ensures search results are always shown
+      if (isSearch && articlesWithSource.length > 0) {
+        console.log('[Aggregate] SEARCH MODE: Creating individual article groups as fallback from', articlesWithSource.length, 'articles');
+        const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2).map((article, index) => ({
+          groupId: `fallback-${index}`,
+          groupTitle: article.title || 'Untitled article',
+          summary: article.description || 'No summary available.',
+          aiSummary: article.description || 'No summary available.',
+          articles: [article],
+          sourceCount: 1,
+          sources: [article.sourceName || article.source || 'Unknown']
+        }));
+        summarizedGroups.push(...fallbackGroups);
+        console.log('[Aggregate] Created', fallbackGroups.length, 'fallback groups from individual articles');
+      }
+    }
+
+    // For search queries, if we still have no groups but have articles, create fallback groups
+    // This is a second check in case the first fallback didn't work
+    if (isSearch && summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+      console.log('[Aggregate] SEARCH MODE: Still no groups after summarization, creating fallback groups from', articlesWithSource.length, 'articles');
+      const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 3).map((article, index) => {
+        // Ensure description is at least 20 characters for filtering
+        const description = article.description && article.description.trim().length >= 20 
+          ? article.description 
+          : (article.description || 'Article from ' + (article.sourceName || 'news source') + '.');
+        
+        return {
+          groupId: `fallback-${index}`,
+          groupTitle: article.title || 'Untitled article',
+          summary: description,
+          aiSummary: description,
+          articles: [article],
+          sourceCount: 1,
+          sources: [article.sourceName || article.source || 'Unknown']
+        };
+      });
+      summarizedGroups.push(...fallbackGroups);
+      console.log('[Aggregate] Created', fallbackGroups.length, 'fallback groups from individual articles');
+    }
+
+    // Apply universal pagination - ALL views paginate at 18 groups per page
+    let finalGroups = summarizedGroups;
+    let totalGroups = summarizedGroups.length;
+    let totalPages = 1;
+    let currentPage = 1;
+    const GROUPS_PER_PAGE = MAX_GROUPS_PER_PAGE; // 18
+
+    const groupsPerPage = GROUPS_PER_PAGE;
+    totalPages = Math.max(1, Math.ceil(summarizedGroups.length / groupsPerPage));
+    currentPage = Math.max(1, Math.min(pageNum, totalPages));
+    const startIndex = (currentPage - 1) * groupsPerPage;
+    const endIndex = startIndex + groupsPerPage;
+    finalGroups = summarizedGroups.slice(startIndex, endIndex);
+
+    const viewType = isSearch ? 'search' : isCategory ? 'category' : 'other';
+    console.log(
+      `[Aggregate] ${viewType} view: UNIVERSAL PAGINATION - page ${currentPage} of ${totalPages}`
+    );
+    console.log(
+      `[Aggregate] ${viewType} view: ${summarizedGroups.length} total groups, showing groups ${
+        startIndex + 1
+      }-${Math.min(endIndex, summarizedGroups.length)} (max ${groupsPerPage} per page)`
+    );
+
+    if (finalGroups.length > groupsPerPage) {
+      console.error(
+        `[Aggregate] ERROR: Pagination limit violated! Showing ${finalGroups.length} groups, max is ${groupsPerPage}`
+      );
+      finalGroups = finalGroups.slice(0, groupsPerPage);
+    }
+
+    if (finalGroups.length > GROUPS_PER_PAGE) {
+      console.error(
+        `[Aggregate] CRITICAL: Pagination limit still violated after enforcement!`
+      );
+      finalGroups = finalGroups.slice(0, GROUPS_PER_PAGE);
+    }
+
+    // Final safety check for search: if we have articles but no groups, ensure rawArticles are included
+    const rawArticlesToReturn = isSearch && finalGroups.length === 0 && articlesWithSource.length > 0
+      ? articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2) // Return more raw articles for search
+      : articlesWithSource;
+
+    const responsePayload = {
+      query: query || '',
+      country: country || undefined,
+      category: category || undefined,
+      groupedArticles: finalGroups,
+      rawArticles: rawArticlesToReturn,
+      pagination: {
+        currentPage: currentPage,
+        totalPages: totalPages,
+        totalGroups: totalGroups,
+        groupsPerPage: GROUPS_PER_PAGE
+      },
+      ...(warnings.length > 0 && { warnings })
+    };
+    
+    // Log final payload for debugging
+    console.log('[Aggregate] Final response payload:', {
+      groupedArticlesCount: finalGroups.length,
+      rawArticlesCount: rawArticlesToReturn.length,
+      isSearch,
+      query: query || '(none)'
+    });
+
+    if (finalGroups.length === 0 && articlesWithSource.length > 0) {
+      console.warn('[Aggregate] WARNING: No groups created, but raw articles exist.');
+      console.warn('[Aggregate] Frontend will use fallback mode to display raw articles.');
+    }
+
+    console.log(
+      '[Aggregate] Returning',
+      finalGroups.length,
+      'summarized groups and',
+      articlesWithSource.length,
+      'raw articles'
+    );
+    
+    // For search queries, if we have articles but no groups, log detailed info
+    if (isSearch && finalGroups.length === 0 && articlesWithSource.length > 0) {
+      console.error('[Aggregate] SEARCH MODE ERROR: No groups to return, but we have', articlesWithSource.length, 'raw articles');
+      console.error('[Aggregate] This indicates all groups were filtered out or summarization failed');
+      console.error('[Aggregate] Frontend should display raw articles as fallback');
+      console.error('[Aggregate] This should not happen if fallback mechanism is working correctly');
+    }
+    
+    // Final check: if search has no groups and no articles, log it
+    if (isSearch && finalGroups.length === 0 && articlesWithSource.length === 0) {
+      console.error('[Aggregate] SEARCH MODE ERROR: No groups AND no articles returned');
+      console.error('[Aggregate] This indicates APIs are not returning results for query:', query);
+    }
+    
+    res.json(responsePayload);
+  } catch (error) {
+    console.error('[Aggregate] ========================================');
+    console.error('[Aggregate] ERROR in aggregate endpoint');
+    console.error('[Aggregate] Error message:', error.message);
+    console.error('[Aggregate] Error stack:', error.stack);
+    console.error('[Aggregate] ========================================');
+    
+    res.status(500).json({
+      error: error.message || 'Failed to aggregate news',
+      groupedArticles: [],
+      rawArticles: [],
+      warnings: [`Error: ${error.message || 'Unknown error occurred'}`]
+    });
+  }
+});
+
+// Log router export
+console.log('[NewsAggregate Router] Router exported successfully');
+console.log(
+  '[NewsAggregate Router] Routes registered:',
+  router.stack
+    .map(layer => {
+      if (layer.route) {
+        return `${Object.keys(layer.route.methods)
+          .join(', ')
+          .toUpperCase()} ${layer.route.path}`;
+      }
+      return null;
+    })
+    .filter(Boolean)
+);
+
+module.exports = router;

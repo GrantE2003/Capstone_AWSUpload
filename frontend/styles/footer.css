@@ -1,0 +1,11 @@
+/* ===============================
+   Footer - Uniform clean styling
+================================*/
+footer {
+  border-top: 1px solid var(--border, #dee2e6);
+  background: var(--header-bg, #e9ecef);
+  padding: 1rem;
+  text-align: center;
+  color: var(--text, #212529);
+  margin-top: auto;
+}
