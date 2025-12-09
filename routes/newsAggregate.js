@@ -494,6 +494,40 @@ router.get('/aggregate', async (req, res) => {
       console.warn('[Aggregate] WARNING: No groups created at all!');
     }
     
+    // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
+    // This is especially important for search results where one source might dominate
+    const MAX_GROUPS_PER_SOURCE = Math.ceil(GROUPS_TO_SUMMARIZE / 2); // Max 50% from one source
+    const sourceGroupCounts = {};
+    const diversifiedGroups = [];
+    
+    for (const group of groupsToSummarize) {
+      const primarySource = group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown';
+      const sourceCount = getUniqueSourceCount(group);
+      
+      // Multi-source groups always included
+      if (sourceCount >= 2) {
+        diversifiedGroups.push(group);
+      } else {
+        // Single-source groups: limit per source
+        const currentCount = sourceGroupCounts[primarySource] || 0;
+        if (currentCount < MAX_GROUPS_PER_SOURCE) {
+          diversifiedGroups.push(group);
+          sourceGroupCounts[primarySource] = currentCount + 1;
+        } else {
+          console.log(`[Aggregate] Skipping ${primarySource} group to ensure source diversity (already have ${currentCount} groups from this source)`);
+        }
+      }
+    }
+    
+    // If we removed too many groups, fill remaining slots with any available groups
+    if (diversifiedGroups.length < GROUPS_TO_SUMMARIZE) {
+      const remaining = GROUPS_TO_SUMMARIZE - diversifiedGroups.length;
+      const skippedGroups = groupsToSummarize.filter(g => !diversifiedGroups.includes(g));
+      diversifiedGroups.push(...skippedGroups.slice(0, remaining));
+    }
+    
+    groupsToSummarize = diversifiedGroups.slice(0, GROUPS_TO_SUMMARIZE);
+    
     // Log source distribution in groups to summarize
     const sourceDistInSummary = {};
     groupsToSummarize.forEach(g => {

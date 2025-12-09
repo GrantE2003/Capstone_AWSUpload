@@ -105,18 +105,25 @@ async function fetchGdeltArticles({ query, country, category }) {
         const url = article.url || article.shareurl || article.articleurl || article.articleURL || '';
         const title = article.title || article.seotitle || article.seoTitle || 'No title';
         // Try multiple fields for description - but ensure it's not just the title
-        let description = article.seodescription || article.seoDescription || article.snippet || article.description || article.bodyText || '';
+        let description = article.seodescription || article.seoDescription || article.snippet || article.description || article.bodyText || article.summary || '';
         
         // Normalize both title and description for comparison
-        const normalizedTitle = (title || '').toLowerCase().trim();
-        const normalizedDesc = (description || '').toLowerCase().trim();
+        const normalizedTitle = (title || '').toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+        const normalizedDesc = (description || '').toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
         
-        // If description is too short, same as title, or just repeats title, use fallback
+        // Calculate word overlap between title and description
+        const titleWords = new Set(normalizedTitle.split(/\s+/).filter(w => w.length > 2));
+        const descWords = normalizedDesc.split(/\s+/).filter(w => w.length > 2);
+        const matchingWords = descWords.filter(w => titleWords.has(w));
+        const overlapRatio = descWords.length > 0 ? matchingWords.length / descWords.length : 0;
+        
+        // If description is too short, same as title, has high word overlap with title, or just repeats title, use fallback
         if (!description || 
-            description.length < 30 || 
+            description.length < 50 || 
             normalizedDesc === normalizedTitle ||
             normalizedDesc.startsWith(normalizedTitle) ||
-            normalizedTitle.startsWith(normalizedDesc)) {
+            normalizedTitle.startsWith(normalizedDesc) ||
+            overlapRatio > 0.7) { // If more than 70% of description words match title words
           description = 'No description available.';
         }
         
