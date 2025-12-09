@@ -423,37 +423,86 @@ router.get('/aggregate', async (req, res) => {
       `[Aggregate] After filtering: ${multiSourceGroups.length} multi-source groups, ${singleSourceGroups.length} single-source groups`
     );
 
-    // Prioritize multi-source groups, but allow single-source as fallback
-    let groupsToSummarize;
+    // Interleave single-source groups by source to ensure diversity on each page
+    // This prevents all groups from one source from appearing on the same page
+    const interleavedSingleSourceGroups = [];
+    if (singleSourceGroups.length > 0) {
+      // Helper to get the primary source of a single-source group
+      const getGroupSource = (group) => {
+        const sources = group.articles.map(a => a.source || a.sourceName || 'unknown');
+        return sources[0]?.toLowerCase() || 'unknown';
+      };
 
-    if (multiSourceGroups.length >= MAX_GROUPS_PER_PAGE) {
-      // Plenty of multi-source groups, just take the top N
-      groupsToSummarize = multiSourceGroups.slice(0, MAX_GROUPS_PER_PAGE);
+      // Separate single-source groups by their source
+      const groupsBySource = {};
+      singleSourceGroups.forEach(group => {
+        const source = getGroupSource(group);
+        if (!groupsBySource[source]) {
+          groupsBySource[source] = [];
+        }
+        groupsBySource[source].push(group);
+      });
+
+      // Interleave groups from different sources round-robin style
+      const sourceKeys = Object.keys(groupsBySource);
+      let maxLength = Math.max(...Object.values(groupsBySource).map(arr => arr.length));
+      
+      for (let i = 0; i < maxLength; i++) {
+        for (const sourceKey of sourceKeys) {
+          if (i < groupsBySource[sourceKey].length) {
+            interleavedSingleSourceGroups.push(groupsBySource[sourceKey][i]);
+          }
+        }
+      }
+
+      console.log(`[Aggregate] Interleaved ${interleavedSingleSourceGroups.length} single-source groups from ${sourceKeys.length} sources`);
+    }
+
+    // Prioritize multi-source groups, but ensure source diversity
+    // Summarize enough groups to fill multiple pages to ensure source diversity across pages
+    const GROUPS_TO_SUMMARIZE = Math.min(MAX_GROUPS_PER_PAGE * 3, filteredGroups.length); // Summarize up to 3 pages worth
+    
+    let groupsToSummarize = [];
+
+    if (multiSourceGroups.length >= GROUPS_TO_SUMMARIZE) {
+      // Plenty of multi-source groups, take top N (already sorted by recency)
+      groupsToSummarize = multiSourceGroups.slice(0, GROUPS_TO_SUMMARIZE);
       console.log(
         `[Aggregate] Using ${groupsToSummarize.length} multi-source groups (core functionality working)`
       );
     } else if (multiSourceGroups.length > 0) {
-      // Some multi-source groups, top them up with single-source groups
-      const remainingSlots = MAX_GROUPS_PER_PAGE - multiSourceGroups.length;
+      // Some multi-source groups, combine with interleaved single-source groups
+      const remainingSlots = GROUPS_TO_SUMMARIZE - multiSourceGroups.length;
       groupsToSummarize = [
         ...multiSourceGroups,
-        ...singleSourceGroups.slice(0, remainingSlots)
+        ...interleavedSingleSourceGroups.slice(0, remainingSlots)
       ];
       console.log(
         `[Aggregate] Using ${multiSourceGroups.length} multi-source + ${
           groupsToSummarize.length - multiSourceGroups.length
-        } single-source groups`
+        } interleaved single-source groups (total: ${groupsToSummarize.length})`
       );
-    } else if (singleSourceGroups.length > 0) {
-      // No multi-source groups, fallback to single-source (capped)
-      groupsToSummarize = singleSourceGroups.slice(0, MAX_GROUPS_PER_PAGE);
+    } else if (interleavedSingleSourceGroups.length > 0) {
+      // No multi-source groups, use interleaved single-source (ensures source diversity)
+      groupsToSummarize = interleavedSingleSourceGroups.slice(0, GROUPS_TO_SUMMARIZE);
       console.warn(
-        `[Aggregate] WARNING: No multi-source groups found. Using ${groupsToSummarize.length} single-source groups as fallback.`
+        `[Aggregate] WARNING: No multi-source groups found. Using ${groupsToSummarize.length} interleaved single-source groups as fallback.`
       );
     } else {
       groupsToSummarize = [];
       console.warn('[Aggregate] WARNING: No groups created at all!');
     }
+    
+    // Log source distribution in groups to summarize
+    const sourceDistInSummary = {};
+    groupsToSummarize.forEach(g => {
+      const sources = g.articles.map(a => a.source || a.sourceName || 'unknown');
+      const uniqueSources = [...new Set(sources)];
+      uniqueSources.forEach(s => {
+        sourceDistInSummary[s] = (sourceDistInSummary[s] || 0) + 1;
+      });
+    });
+    console.log(`[Aggregate] Source distribution in groups to summarize:`, sourceDistInSummary);
 
     // Summarize each group (with concurrency limit)
     const MAX_CONCURRENT_SUMMARIES = 3;
