@@ -104,8 +104,22 @@ async function fetchGdeltArticles({ query, country, category }) {
       .map(article => {
         const url = article.url || article.shareurl || article.articleurl || article.articleURL || '';
         const title = article.title || article.seotitle || article.seoTitle || 'No title';
-        // Try multiple fields for description
-        const description = article.seodescription || article.seoDescription || article.snippet || article.description || article.bodyText || 'No description available.';
+        // Try multiple fields for description - but ensure it's not just the title
+        let description = article.seodescription || article.seoDescription || article.snippet || article.description || article.bodyText || '';
+        
+        // Normalize both title and description for comparison
+        const normalizedTitle = (title || '').toLowerCase().trim();
+        const normalizedDesc = (description || '').toLowerCase().trim();
+        
+        // If description is too short, same as title, or just repeats title, use fallback
+        if (!description || 
+            description.length < 30 || 
+            normalizedDesc === normalizedTitle ||
+            normalizedDesc.startsWith(normalizedTitle) ||
+            normalizedTitle.startsWith(normalizedDesc)) {
+          description = 'No description available.';
+        }
+        
         // Try multiple fields for date
         const publishedAt = article.seendate || article.seenDate || article.date || article.time || article.publishedAt || article.published || '';
         

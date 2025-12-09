@@ -762,7 +762,7 @@ app.get('/api/guardian', async (req, res) => {
             },
             {
               role: 'user',
-              content: `You are summarizing news articles. Create an EXTREMELY detailed, comprehensive, information-dense summary that provides maximum information value. Your summary should be 12-18 sentences (about 350-500 words) and include EVERYTHING relevant:
+              content: `You are summarizing news articles. Create an EXTREMELY detailed, comprehensive, information-dense summary that provides maximum information value. Your summary should be 12-18 sentences (about 350-500 words, MINIMUM 250 characters) and include EVERYTHING relevant:
 
 - WHO: All key people, organizations, and entities involved with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
 - WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
@@ -789,8 +789,9 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 9. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
 10. Be thorough, detailed, and information-rich - readers should feel fully informed
 11. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
+12. The summary MUST be at least 250 characters long - be thorough and detailed enough to meet this requirement
 
-Start your summary directly with the story content. Do not preface it with the title or source. NEVER repeat the title.
+Start your summary directly with the story content. Do not preface it with the title or source. NEVER repeat the title. MINIMUM LENGTH: 250 characters.
 
 Article Content:\n${text}`
             }

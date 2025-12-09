@@ -44,7 +44,7 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (12-18 sentences, about 350-500 words) that synthesizes information from ALL of the articles. The summary must be maximally informative and include EVERYTHING relevant:
+  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (12-18 sentences, about 350-500 words, MINIMUM 250 characters) that synthesizes information from ALL of the articles. The summary must be maximally informative and include EVERYTHING relevant:
 
 - WHO: All key people, organizations, and entities with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
 - WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
@@ -72,8 +72,9 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 10. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
 11. Synthesize information from ALL sources to provide the most complete picture possible
 12. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
+13. The summary MUST be at least 250 characters long - be thorough and detailed enough to meet this requirement
 
-The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich. NEVER repeat the title."
+The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich. NEVER repeat the title. MINIMUM LENGTH: 250 characters."
 }`;
 
     let apiResponse;
@@ -149,6 +150,21 @@ The summary should provide complete, comprehensive understanding of the story wi
         console.warn('[LLM] Cleaning removed too much content, using basic summary fallback');
         cleanedSummary = generateBasicSummary(group).summary;
       }
+      
+      // ENFORCE MINIMUM LENGTH: Summaries must be at least 250 characters
+      const MIN_SUMMARY_LENGTH = 250;
+      if (cleanedSummary.length < MIN_SUMMARY_LENGTH) {
+        console.warn(`[LLM] Summary too short (${cleanedSummary.length} chars), expanding...`);
+        // Try to expand the summary by adding more detail from articles
+        const expandedSummary = expandShortSummary(cleanedSummary, group);
+        if (expandedSummary.length >= MIN_SUMMARY_LENGTH) {
+          cleanedSummary = expandedSummary;
+        } else {
+          // If still too short, regenerate with more emphasis on length
+          console.warn('[LLM] Expanded summary still too short, using enhanced basic summary');
+          cleanedSummary = generateEnhancedBasicSummary(group);
+        }
+      }
     }
 
     const summary = cleanedSummary;
@@ -183,6 +199,101 @@ The summary should provide complete, comprehensive understanding of the story wi
     // Absolute safety net – never throw up to the router
     return generateBasicSummary(group);
   }
+}
+
+/**
+ * Expand a short summary by adding more details from articles
+ */
+function expandShortSummary(shortSummary, group) {
+  const articles = Array.isArray(group.articles) ? group.articles : [];
+  const expanded = [shortSummary];
+  
+  // Add more description content from articles
+  for (const article of articles) {
+    if (article.description && article.description.trim().length > 50) {
+      const normalizedTitle = (article.title || '').toLowerCase().trim();
+      const normalizedDesc = (article.description || '').toLowerCase().trim();
+      
+      // Only add if description is different from title
+      if (normalizedDesc !== normalizedTitle && !normalizedDesc.startsWith(normalizedTitle)) {
+        const sentences = article.description.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 20);
+        if (sentences.length > 0) {
+          expanded.push(sentences.slice(0, 2).join('. '));
+        }
+      }
+    }
+    if (expanded.join(' ').length >= 250) break;
+  }
+  
+  return expanded.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Generate an enhanced basic summary that meets minimum length requirements
+ */
+function generateEnhancedBasicSummary(group) {
+  const articles = Array.isArray(group.articles) ? group.articles : [];
+  const sources = [...new Set(articles.map(a => a.sourceName || a.source || 'Unknown'))];
+  
+  const snippets = [];
+  for (const article of articles) {
+    if (article.description && article.description.trim().length > 40) {
+      const normalizedTitle = (article.title || '').toLowerCase().trim();
+      const normalizedDesc = (article.description || '').toLowerCase().trim();
+      
+      // Skip if description is just the title
+      if (normalizedDesc !== normalizedTitle && !normalizedDesc.startsWith(normalizedTitle)) {
+        const sentences = article.description
+          .split(/[.!?]+/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        if (sentences.length > 0) {
+          snippets.push(...sentences.slice(0, 3)); // Take more sentences
+        }
+      }
+    }
+  }
+  
+  let summary;
+  if (snippets.length > 0) {
+    summary = snippets.join('. ').replace(/\s+/g, ' ').trim();
+    if (!summary.endsWith('.')) summary += '.';
+  } else {
+    // Fallback: create a more detailed summary from titles and sources
+    const titles = articles.map(a => a.title).filter(Boolean);
+    summary = `Multiple sources (${sources.join(', ')}) reported on this story. `;
+    if (titles.length > 0) {
+      summary += `The story involves: ${titles.slice(0, 3).join(', ')}. `;
+    }
+    summary += `Additional details are available in the full articles from these sources.`;
+  }
+  
+  // Ensure minimum length - add more content if needed
+  const MIN_LENGTH = 250;
+  if (summary.length < MIN_LENGTH) {
+    // Try to get more content from articles
+    for (const article of articles) {
+      if (article.description && article.description.trim().length > 50) {
+        const normalizedTitle = (article.title || '').toLowerCase().trim();
+        const normalizedDesc = (article.description || '').toLowerCase().trim();
+        
+        if (normalizedDesc !== normalizedTitle && !normalizedDesc.startsWith(normalizedTitle)) {
+          const sentences = article.description.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 20);
+          if (sentences.length > 0 && !summary.includes(sentences[0])) {
+            summary += ' ' + sentences.slice(0, 2).join('. ') + '.';
+            if (summary.length >= MIN_LENGTH) break;
+          }
+        }
+      }
+    }
+    
+    // If still too short, add generic padding
+    if (summary.length < MIN_LENGTH) {
+      summary += ' This story has been covered by multiple news sources, each providing unique perspectives and additional context on the events described.';
+    }
+  }
+  
+  return summary.replace(/\s+/g, ' ').trim();
 }
 
 /**
