@@ -24,7 +24,7 @@
   console.log("[Article Loader] Final API_BASE:", API_BASE);
 
   // Controls the Number of Articles Shown Per Page
-  const ARTICLES_PER_PAGE = 18;
+  const ARTICLES_PER_PAGE = 9;
 
   // ==========================
   // Maps API category Ids to the Correct Pages
@@ -459,243 +459,9 @@
   }
 
   // ==========================
-  // Normalize article data (similar to search_results_loader.js)
-  // ==========================
-  function normalizeArticle(raw) {
-    if (!raw) return null;
-
-    const title =
-      raw.title ||
-      raw.headline ||
-      (raw.fields && raw.fields.headline) ||
-      "Untitled";
-
-    const url = raw.url || raw.webUrl || raw.link || null;
-
-    const source =
-      raw.sourceName ||
-      raw.source ||
-      (raw.provider && raw.provider.name) ||
-      (raw.sectionName ? `The Guardian – ${raw.sectionName}` : null) ||
-      "Unknown source";
-
-    const publishedAt =
-      raw.publishedAt ||
-      raw.webPublicationDate ||
-      raw.date ||
-      raw.pub_date ||
-      null;
-
-    const content =
-      raw.content ||
-      raw.bodyText ||
-      (raw.fields && raw.fields.bodyText) ||
-      raw.description ||
-      raw.trailText ||
-      raw.snippet ||
-      "";
-
-    return { title, url, source, publishedAt, content, raw };
-  }
-
-  // ==========================
-  // Select relevant articles (similar to search_results_loader.js)
-  // ==========================
-  function selectRelevantArticles(rawArticles, category, maxCount = 10) {
-    const normArticles = rawArticles
-      .map(normalizeArticle)
-      .filter(a => a && a.url && a.title);
-
-    if (!category) {
-      // No category? Just take the newest ones.
-      return normArticles
-        .sort((a, b) => {
-          const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-          const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-          return db - da;
-        })
-        .slice(0, maxCount);
-    }
-
-    // Use category as search terms
-    const terms = category
-      .toLowerCase()
-      .split(/[\s-]+/)
-      .filter(Boolean);
-
-    const scored = normArticles.map(a => {
-      const text = (
-        (a.title || "") +
-        " " +
-        (a.content || "")
-      ).toLowerCase();
-
-      let score = 0;
-      for (const term of terms) {
-        if (text.includes(term)) score++;
-      }
-
-      return { article: a, score };
-    });
-
-    // Sort by score (desc), then by date (desc)
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const da = a.article.publishedAt ? new Date(a.article.publishedAt).getTime() : 0;
-      const db = b.article.publishedAt ? new Date(b.article.publishedAt).getTime() : 0;
-      return db - da;
-    });
-
-    // Filter out completely unrelated ones (score = 0)
-    const withScore = scored.filter(s => s.score > 0);
-
-    const chosen = (withScore.length > 0 ? withScore : scored).slice(0, maxCount);
-
-    console.log("[Article Loader] Relevance scores:", chosen.map(c => ({
-      title: c.article.title,
-      score: c.score,
-      date: c.article.publishedAt,
-    })));
-
-    return chosen.map(c => c.article);
-  }
-
-  // ==========================
-  // Render articles list (similar to search_results_loader.js)
-  // ==========================
-  function renderArticlesList(articles, container) {
-    container.innerHTML = "";
-
-    if (!articles || articles.length === 0) {
-      container.innerHTML =
-        '<p style="padding: 20px; text-align: center;">No articles available.</p>';
-      return;
-    }
-
-    articles.forEach((article) => {
-      const card = document.createElement("article");
-      card.className = "article-card";
-
-      const titleLink = document.createElement("a");
-      titleLink.href = article.url;
-      titleLink.target = "_blank";
-      titleLink.rel = "noopener noreferrer";
-
-      const titleEl = document.createElement("h3");
-      titleEl.className = "article-title";
-      titleEl.textContent = article.title;
-      titleLink.appendChild(titleEl);
-
-      const metaEl = document.createElement("p");
-      metaEl.className = "article-meta";
-      const date = formatDate(article.publishedAt);
-      metaEl.textContent = date
-        ? `${article.source} • ${date}`
-        : article.source;
-
-      card.appendChild(titleLink);
-      card.appendChild(metaEl);
-
-      container.appendChild(card);
-    });
-  }
-
-  // ==========================
-  // Render summary text
-  // ==========================
-  function renderSummaryLoading(container, category) {
-    container.innerHTML = `
-      <h2>Your AI summary for ${category}</h2>
-      <p style="margin-top: 10px; color: #555;">
-        Generating a summary from multiple sources...
-      </p>
-    `;
-  }
-
-  function renderSummaryError(container, errorMessage) {
-    container.innerHTML = `
-      <h2>AI summary unavailable</h2>
-      <p style="margin-top: 10px; color: #b00020; font-style: italic;">
-        ${errorMessage}
-      </p>
-    `;
-  }
-
-  function renderSummaryText(container, category, summary) {
-    container.innerHTML = "";
-
-    const heading = document.createElement("h2");
-    heading.textContent = `Your AI summary for ${category}`;
-
-    const body = document.createElement("p");
-    body.style.marginTop = "12px";
-    body.style.lineHeight = "1.5";
-    body.textContent = summary;
-
-    container.appendChild(heading);
-    container.appendChild(body);
-  }
-
-  // ==========================
-  // Get or create containers
-  // ==========================
-  function getOrCreateContainers() {
-    const main = document.querySelector("main") || document.body;
-
-    // Articles container (check if it exists first)
-    let articlesContainer = main.querySelector(".articles-container");
-    let articlesSection = null;
-    if (articlesContainer) {
-      articlesSection = articlesContainer.closest("section");
-    }
-
-    // Summary container
-    let summaryContainer = document.getElementById("category-summary");
-    if (!summaryContainer) {
-      const section = document.createElement("section");
-      section.id = "category-summary-section";
-
-      const summaryCard = document.createElement("div");
-      summaryCard.className = "card";
-      summaryCard.id = "category-summary";
-
-      section.appendChild(summaryCard);
-      
-      // Insert summary before articles section if it exists, otherwise append
-      if (articlesSection) {
-        main.insertBefore(section, articlesSection);
-      } else {
-        main.appendChild(section);
-      }
-      
-      summaryContainer = summaryCard;
-    }
-
-    // Create articles container if it doesn't exist
-    if (!articlesContainer) {
-      const section = document.createElement("section");
-      section.id = "category-articles-section";
-
-      const heading = document.createElement("h2");
-      heading.textContent = "Articles used in this summary";
-
-      const container = document.createElement("div");
-      container.className = "articles-container";
-
-      section.appendChild(heading);
-      section.appendChild(container);
-      main.appendChild(section);
-
-      articlesContainer = container;
-    }
-
-    return { summaryContainer, articlesContainer };
-  }
-
-  // ==========================
   // Load grouped stories
   // ==========================
-  async function loadArticles() {
+  function loadArticles() {
     const category = getCategoryId();
     if (!category) {
       console.log("[Article Loader] No category for this page; skipping load.");
@@ -705,163 +471,129 @@
     const main = document.querySelector("main");
     if (!main) return;
 
-    const { summaryContainer, articlesContainer } = getOrCreateContainers();
+    let articlesContainer = main.querySelector(".articles-container");
+    if (!articlesContainer) {
+      articlesContainer = document.createElement("div");
+      articlesContainer.className = "articles-container";
+      main.appendChild(articlesContainer);
+    }
 
-    // Show loading states
-    // Format category name for display (e.g., "us-news" -> "US News", "world" -> "World")
-    const categoryDisplayName = category
-      .split('-')
-      .map(word => {
-        // Handle special cases
-        if (word === 'us') return 'US';
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(' ');
-    renderSummaryLoading(summaryContainer, categoryDisplayName);
-    articlesContainer.innerHTML = `
-      <div class="card" style="text-align: center; padding: 40px;">
-        <p style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">Loading articles...</p>
-        <p style="color: #666; font-size: 14px;">Fetching articles from multiple news sources for ${categoryDisplayName}</p>
-      </div>
-    `;
+    articlesContainer.innerHTML =
+      '<div class="card"><p>Loading articles...</p></div>';
 
     const url = buildApiUrl(category);
 
-    try {
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(
-          `HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("[Article Loader] Received data:", {
-        groupedArticles: data.groupedArticles?.length || 0,
-        rawArticles: data.rawArticles?.length || 0,
-        fallbackMode: data.fallbackMode || false,
-      });
-
-      // Collect all articles from all groups
-      let rawArticles = [];
-
-      if (Array.isArray(data.rawArticles)) {
-        rawArticles = data.rawArticles;
-      } else if (Array.isArray(data.groupedArticles)) {
-        data.groupedArticles.forEach((group) => {
-          if (Array.isArray(group.articles)) {
-            rawArticles.push(...group.articles);
-          }
-        });
-      }
-
-      if (!rawArticles || rawArticles.length === 0) {
-        renderSummaryError(
-          summaryContainer,
-          "No articles were found for this topic. Please try again later."
-        );
-        articlesContainer.innerHTML =
-          '<p style="padding: 20px; text-align: center;">No articles found.</p>';
-        return;
-      }
-
-      // Select the most relevant articles (up to 10)
-      const selectedArticles = selectRelevantArticles(rawArticles, category, 10);
-      console.log(
-        "[Article Loader] Selected",
-        selectedArticles.length,
-        "articles for summary"
-      );
-
-      renderArticlesList(selectedArticles, articlesContainer);
-
-      // Call the multi-article summarizer (same as search)
-      const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
-      const summarizeUrl = `${base}/api/summarize/search`;
-
-      console.log("[Article Loader] Calling summarizer:", summarizeUrl);
-
-      const summarizeResp = await fetch(summarizeUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: categoryDisplayName,
-          articles: selectedArticles.map((a) => ({
-            title: a.title,
-            url: a.url,
-            source: a.source,
-            publishedAt: a.publishedAt,
-            content: a.content,
-          })),
-        }),
-      });
-
-      console.log(
-        "[Article Loader] Summarizer response:",
-        summarizeResp.status,
-        summarizeResp.statusText
-      );
-
-      const summarizeData = await summarizeResp
-        .json()
-        .catch(async (parseErr) => {
-          console.error("[Article Loader] Failed to parse summarizer JSON:", parseErr);
-          const text = await summarizeResp.text();
-          console.error("[Article Loader] Raw summarizer response:", text);
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
           throw new Error(
-            `Summarizer returned invalid response (${summarizeResp.status})`
+            `HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`
           );
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("[Article Loader] Received data:", {
+          groupedArticles: data.groupedArticles?.length || 0,
+          rawArticles: data.rawArticles?.length || 0,
+          fallbackMode: data.fallbackMode || false,
         });
 
-      if (!summarizeResp.ok || summarizeData.error) {
-        const msg =
-          summarizeData.error ||
-          summarizeData.aiSummary ||
-          `Summarizer error: ${summarizeResp.status} ${summarizeResp.statusText}`;
-        throw new Error(msg);
-      }
+        articlesContainer.innerHTML = "";
 
-      const rawSummary =
-        summarizeData.aiSummary ||
-        summarizeData.summary ||
-        "No summary generated.";
+        let groups = data.groupedArticles || [];
 
-      const cleanSummary = String(rawSummary)
-        .replace(/<[^>]+>/g, "")
-        .trim();
+        if (!groups.length && data.rawArticles && data.rawArticles.length) {
+          // Fallback; Precautionary Raw Articles Handling incase Article Grouping Fails
+          groups = data.rawArticles.map((a, idx) => ({
+            groupId: a.id || `raw-${idx}`,
+            groupTitle: a.title,
+            summary: a.description || "",
+            articles: [
+              {
+                title: a.title,
+                url: a.url,
+                description: a.description || "",
+                publishedAt: a.publishedAt,
+                sourceName: a.sourceName || a.source || "Unknown source",
+                source: a.source || "",
+              },
+            ],
+          }));
+        }
 
-      if (!cleanSummary) {
-        renderSummaryError(
-          summaryContainer,
-          "The AI did not return any summary text. Please try again."
-        );
-      } else {
-        renderSummaryText(summaryContainer, categoryDisplayName, cleanSummary);
-      }
+        if (groups.length > 0) {
+          // Filter out groups without valid summaries before rendering
+          const groupsWithSummaries = groups.filter(group => {
+            const summary = group.aiSummary || group.summary;
+            if (!summary || summary.trim().length < 50) {
+              console.log('[Article Loader] Filtering out group without valid summary');
+              return false;
+            }
+            
+            // Check if summary is just the title
+            const primaryArticle = (group.articles && group.articles[0]) || {};
+            const articleTitle = primaryArticle.title || group.groupTitle || '';
+            if (articleTitle) {
+              const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              const normalizedSummary = String(summary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              
+              if (normalizedSummary === normalizedTitle || 
+                  normalizedSummary.startsWith(normalizedTitle) ||
+                  normalizedTitle.startsWith(normalizedSummary)) {
+                console.log('[Article Loader] Filtering out group - summary is just the title');
+                return false;
+              }
+            }
+            
+            return true;
+          });
+          
+          // Randomize and take only ARTICLES_PER_PAGE (9 cards)
+          const shuffled = shuffleArray(groupsWithSummaries);
+          const selectedGroups = shuffled.slice(0, ARTICLES_PER_PAGE);
 
-      if (data.warnings && data.warnings.length > 0) {
-        const warningsDiv = document.createElement("div");
-        warningsDiv.className = "warnings";
-        warningsDiv.innerHTML = `
-          <h4>Note:</h4>
-          <ul>
-            ${data.warnings.map((w) => `<li>${w}</li>`).join("")}
-          </ul>
-        `;
-        articlesContainer.appendChild(warningsDiv);
-      }
-    } catch (error) {
-      console.error("[Article Loader] Error loading articles:", error);
-      console.error("[Article Loader] API_BASE used:", API_BASE);
+          console.log(
+            "[Article Loader] Displaying",
+            selectedGroups.length,
+            "randomized grouped stories (filtered from",
+            groups.length,
+            "total groups)"
+          );
 
-      renderSummaryError(
-        summaryContainer,
-        error.message || "Unknown error occurred."
-      );
-      articlesContainer.innerHTML =
-        '<p style="padding: 20px; text-align: center;">There was an error loading articles.</p>';
-    }
+          selectedGroups.forEach((group) =>
+            renderStoryGroup(group, articlesContainer)
+          );
+
+          // Pagination display removed per user request
+        } else {
+          articlesContainer.innerHTML =
+            '<div class="card"><p>No stories are available right now for this topic.</p></div>';
+        }
+
+        if (data.warnings && data.warnings.length > 0) {
+          const warningsDiv = document.createElement("div");
+          warningsDiv.className = "warnings";
+          warningsDiv.innerHTML = `
+            <h4>Note:</h4>
+            <ul>
+              ${data.warnings.map((w) => `<li>${w}</li>`).join("")}
+            </ul>
+          `;
+          articlesContainer.appendChild(warningsDiv);
+        }
+      })
+      .catch((error) => {
+        console.error("[Article Loader] Error loading articles:", error);
+        console.error("[Article Loader] API_BASE used:", API_BASE);
+
+        let errorMessage = "Error loading articles. Please try again.";
+        if (error.message) {
+          errorMessage += `<br><small>${error.message}</small>`;
+        }
+
+        articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
+      });
   }
 
   // ==========================
