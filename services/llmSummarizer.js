@@ -34,7 +34,7 @@ Published: ${article.publishedAt || 'Unknown date'}
     }).join('\n\n');
 
     const prompt = `You are analyzing multiple news articles about the same real-world story from different sources.
-Your task is to create ONE comprehensive, informative combined summary that synthesizes information from all sources.
+Your task is to create ONE highly detailed, comprehensive combined summary that synthesizes information from all sources and provides maximum value to readers.
 
 Here are the articles:
 
@@ -44,7 +44,20 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "A comprehensive, informative combined summary (4-7 sentences, about 150-250 words) that synthesizes information from ALL of the articles. Include key details: who, what, when, where, why, and how. Include specific names, dates, locations, numbers, quotes, and important context. Do not mention sources or compare them. Write in clear, engaging prose that provides substantial information and helps readers understand the full story."
+  "summary": "A highly detailed, comprehensive combined summary (8-12 sentences, about 250-400 words) that synthesizes information from ALL of the articles. The summary must be extremely informative and include:
+
+- WHO: All key people, organizations, and entities with their specific roles
+- WHAT: The main event, action, or development with specific details
+- WHEN: Exact dates, times, and timeline of events
+- WHERE: Specific locations, regions, or places mentioned
+- WHY: The reasons, causes, motivations, and context behind the story
+- HOW: The process, methods, or mechanisms involved
+- IMPACT: Consequences, implications, or significance
+- QUOTES: Important quotes from key sources if available
+- NUMBERS: Specific statistics, figures, amounts, or data points
+- BACKGROUND: Relevant context that helps understand the story
+
+Do not mention sources or compare them. Write in clear, engaging prose that makes readers feel fully informed. This summary should provide complete understanding of the story."
 }`;
 
     let apiResponse;
@@ -60,8 +73,8 @@ Return ONLY valid JSON with this exact shape:
             },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 800,
-          temperature: 0.4,
+          max_tokens: 1200,
+          temperature: 0.3,
           response_format: { type: 'json_object' } // new-style JSON mode
         },
         {

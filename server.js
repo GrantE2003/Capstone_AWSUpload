@@ -758,15 +758,28 @@ app.get('/api/guardian', async (req, res) => {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert news summarizer. Create comprehensive, informative summaries that capture the key information, context, and important details from news articles. Include specific names, dates, locations, numbers, quotes, and events. Write in clear, engaging prose that helps readers understand the full story.'
+              content: 'You are an expert news analyst and summarizer. Create highly detailed, comprehensive summaries that provide maximum value to readers. Your summaries should be information-dense, covering all critical aspects: key players and their roles, specific facts and figures, timeline of events, background context, implications, quotes from important sources, locations, dates, and why this story matters. Write in clear, engaging prose that makes readers feel fully informed without needing to read the full article.'
             },
             {
               role: 'user',
-              content: `Create a comprehensive and informative summary of this news article. Include all important details: who, what, when, where, why, and how. Include specific names, dates, locations, numbers, quotes, and key events. Write 3-5 sentences that provide substantial information and context. Make it informative and detailed:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
+              content: `Create a highly detailed, comprehensive summary of this news article that provides maximum information value. Your summary should be 6-10 sentences and include:
+
+- WHO: All key people, organizations, and entities involved with their specific roles
+- WHAT: The main event, action, or development with specific details
+- WHEN: Exact dates, times, and timeline of events
+- WHERE: Specific locations, regions, or places mentioned
+- WHY: The reasons, causes, motivations, and context behind the story
+- HOW: The process, methods, or mechanisms involved
+- IMPACT: Consequences, implications, or significance of the news
+- QUOTES: Important quotes from key sources if available
+- NUMBERS: Specific statistics, figures, amounts, or data points
+- BACKGROUND: Relevant context that helps understand the story
+
+Make this summary extremely informative and useful - readers should feel they have a complete understanding of the story. Write in engaging, clear prose:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
             }
           ],
-          max_tokens: 600,
-          temperature: 0.5
+          max_tokens: 1000,
+          temperature: 0.4
         }, {
           headers: headers,
           timeout: 30000
