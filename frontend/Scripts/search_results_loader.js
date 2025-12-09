@@ -263,15 +263,38 @@ const API_BASE = (function () {
           articleForSummary.headline ||
           "News article";
 
-        const textForSummary =
-          (group.fullArticleText && String(group.fullArticleText)) ||
-          (group.summary && String(group.summary)) ||
-          (group.aiSummary && String(group.aiSummary)) ||
-          articleForSummary.description ||
-          articleForSummary.trailText ||
-          articleForSummary.snippet ||
-          articleForSummary.content ||
-          "";
+        // Build comprehensive text from all articles in the group (same as Quick Links)
+        // Combine descriptions/content from all articles, not the pre-generated group summary
+        let textForSummary = "";
+        
+        if (group.articles && group.articles.length > 0) {
+          // Combine text from all articles in the group
+          const articleTexts = group.articles.map((article, index) => {
+            const source = (article.sourceName || article.source || 'Unknown').toUpperCase();
+            const title = article.title || article.headline || 'No title';
+            const description = article.description || article.trailText || article.snippet || '';
+            const content = article.content || article.bodyText || '';
+            const fullText = content || description;
+            
+            return `[${source} - Article ${index + 1}]
+Title: ${title}
+${fullText ? `Content: ${fullText}` : 'No content available'}
+---`;
+          }).filter(text => text.length > 50); // Only include articles with meaningful content
+          
+          textForSummary = articleTexts.join('\n\n');
+        }
+        
+        // Fallback to single article if group text is empty
+        if (!textForSummary || textForSummary.trim().length === 0) {
+          textForSummary =
+            articleForSummary.content ||
+            articleForSummary.bodyText ||
+            articleForSummary.description ||
+            articleForSummary.trailText ||
+            articleForSummary.snippet ||
+            "";
+        }
 
         console.log("[Search Results Loader] Requesting summary for:", titleForSummary);
         console.log("[Search Results Loader] Text length:", textForSummary.length);
