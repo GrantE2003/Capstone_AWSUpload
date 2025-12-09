@@ -755,6 +755,9 @@ app.get('/api/search', async (req, res) => {
 
     const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
 
+
+
+
     if (response.data.response.status !== 'ok') {
       throw new Error(`Guardian API error: ${response.data.response.message}`);
     }
@@ -864,6 +867,13 @@ app.get('/api/news/aggregate', async (req, res) => {
     });
 
     const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
+
+    console.log("==============================================");
+    console.log("[DEBUG] RAW GUARDIAN RESPONSE:");
+    console.log(JSON.stringify(response.data, null, 2));
+    console.log("==============================================");
+
+
 
     if (response.data.response.status !== 'ok') {
       throw new Error(`Guardian API error: ${response.data.response.message}`);
