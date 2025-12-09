@@ -523,14 +523,42 @@
         }
 
         if (groups.length > 0) {
+          // Filter out groups without valid summaries before rendering
+          const groupsWithSummaries = groups.filter(group => {
+            const summary = group.aiSummary || group.summary;
+            if (!summary || summary.trim().length < 50) {
+              console.log('[Article Loader] Filtering out group without valid summary');
+              return false;
+            }
+            
+            // Check if summary is just the title
+            const primaryArticle = (group.articles && group.articles[0]) || {};
+            const articleTitle = primaryArticle.title || group.groupTitle || '';
+            if (articleTitle) {
+              const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              const normalizedSummary = String(summary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              
+              if (normalizedSummary === normalizedTitle || 
+                  normalizedSummary.startsWith(normalizedTitle) ||
+                  normalizedTitle.startsWith(normalizedSummary)) {
+                console.log('[Article Loader] Filtering out group - summary is just the title');
+                return false;
+              }
+            }
+            
+            return true;
+          });
+          
           // Randomize and take only ARTICLES_PER_PAGE
-          const shuffled = shuffleArray(groups);
+          const shuffled = shuffleArray(groupsWithSummaries);
           const selectedGroups = shuffled.slice(0, ARTICLES_PER_PAGE);
 
           console.log(
             "[Article Loader] Displaying",
             selectedGroups.length,
-            "randomized grouped stories"
+            "randomized grouped stories (filtered from",
+            groups.length,
+            "total groups)"
           );
 
           selectedGroups.forEach((group) =>

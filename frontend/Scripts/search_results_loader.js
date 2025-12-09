@@ -554,8 +554,39 @@ const API_BASE = (function () {
         articlesContainer.innerHTML = '';
 
         if (data.groupedArticles && data.groupedArticles.length > 0) {
-          console.log('[Search Results] Displaying', data.groupedArticles.length, 'grouped stories');
-          data.groupedArticles.forEach(group => {
+          // Filter out groups without valid summaries before rendering
+          const groupsWithSummaries = data.groupedArticles.filter(group => {
+            const summary = group.aiSummary || group.summary;
+            if (!summary || summary.trim().length < 50) {
+              console.log('[Search Results] Filtering out group without valid summary');
+              return false;
+            }
+            
+            // Check if summary is just the title
+            const primaryArticle = (group.articles && group.articles[0]) || {};
+            const articleTitle = primaryArticle.title || group.groupTitle || '';
+            if (articleTitle) {
+              const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              const normalizedSummary = String(summary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+              
+              if (normalizedSummary === normalizedTitle || 
+                  normalizedSummary.startsWith(normalizedTitle) ||
+                  normalizedTitle.startsWith(normalizedSummary)) {
+                console.log('[Search Results] Filtering out group - summary is just the title');
+                return false;
+              }
+            }
+            
+            return true;
+          });
+          
+          console.log('[Search Results] Filtered to', groupsWithSummaries.length, 'groups with valid summaries (from', data.groupedArticles.length, 'total)');
+          console.log('[Search Results] Source breakdown:', groupsWithSummaries.map(g => {
+            const sources = [...new Set(g.articles.map(a => a.sourceName || a.source || 'unknown'))];
+            return sources.join(', ');
+          }));
+          
+          groupsWithSummaries.forEach(group => {
             renderStoryGroup(group, articlesContainer);
           });
 

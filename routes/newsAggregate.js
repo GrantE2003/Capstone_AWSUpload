@@ -549,13 +549,15 @@ router.get('/aggregate', async (req, res) => {
     
     // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
     // GDELT has much lower limits since it produces worst summaries
-    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
-    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
-    const MAX_GROUPS_GDELT = Math.ceil(GROUPS_TO_SUMMARIZE * 0.2); // 20% max (lowest priority)
+    // For search, ensure Guardian and Currents are prioritized
+    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.5); // 50% max (increased for search)
+    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.5); // 50% max (increased for search)
+    const MAX_GROUPS_GDELT = Math.ceil(GROUPS_TO_SUMMARIZE * 0.15); // 15% max (lowest priority, reduced)
     
     const sourceGroupCounts = {};
     const diversifiedGroups = [];
     
+    // First pass: Add all multi-source groups and Guardian/Currents single-source groups
     for (const group of groupsToSummarize) {
       const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
       const sourceCount = getUniqueSourceCount(group);
@@ -574,42 +576,40 @@ router.get('/aggregate', async (req, res) => {
         } else {
           console.log(`[Aggregate] Skipping multi-source group - all GDELT with no valid descriptions`);
         }
-      } else {
-        // Single-source groups: apply source-specific limits
-        let maxAllowed = MAX_GROUPS_GDELT; // Default to GDELT limit (lowest)
-        if (primarySource === 'guardian') {
-          maxAllowed = MAX_GROUPS_GUARDIAN;
-        } else if (primarySource === 'currents') {
-          maxAllowed = MAX_GROUPS_CURRENTS;
-        }
-        
+      } else if (primarySource === 'guardian' || primarySource === 'currents') {
+        // Guardian and Currents single-source groups: prioritize these
+        const maxAllowed = primarySource === 'guardian' ? MAX_GROUPS_GUARDIAN : MAX_GROUPS_CURRENTS;
         const currentCount = sourceGroupCounts[primarySource] || 0;
         if (currentCount < maxAllowed) {
-          // Additional check: don't include GDELT-only groups with no descriptions
-          if (primarySource === 'gdelt') {
-            const hasValidDescription = group.articles.some(a => {
-              const desc = (a.description || '').trim();
-              return desc && desc !== 'No description available.' && desc.length >= 50;
-            });
-            if (!hasValidDescription) {
-              console.log(`[Aggregate] Skipping GDELT group - no valid descriptions`);
-              continue;
-            }
-          }
-          
           diversifiedGroups.push(group);
           sourceGroupCounts[primarySource] = currentCount + 1;
-        } else {
-          console.log(`[Aggregate] Skipping ${primarySource} group to ensure source diversity (already have ${currentCount} groups from this source, max is ${maxAllowed})`);
         }
       }
     }
     
-    // If we removed too many groups, fill remaining slots with any available groups
-    if (diversifiedGroups.length < GROUPS_TO_SUMMARIZE) {
-      const remaining = GROUPS_TO_SUMMARIZE - diversifiedGroups.length;
-      const skippedGroups = groupsToSummarize.filter(g => !diversifiedGroups.includes(g));
-      diversifiedGroups.push(...skippedGroups.slice(0, remaining));
+    // Second pass: Add GDELT groups only if we have room and they have valid descriptions
+    for (const group of groupsToSummarize) {
+      if (diversifiedGroups.includes(group)) continue; // Already added
+      
+      const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
+      const sourceCount = getUniqueSourceCount(group);
+      
+      if (sourceCount < 2 && primarySource === 'gdelt') {
+        const currentCount = sourceGroupCounts[primarySource] || 0;
+        if (currentCount < MAX_GROUPS_GDELT) {
+          // Additional check: don't include GDELT-only groups with no descriptions
+          const hasValidDescription = group.articles.some(a => {
+            const desc = (a.description || '').trim();
+            return desc && desc !== 'No description available.' && desc.length >= 50;
+          });
+          if (hasValidDescription) {
+            diversifiedGroups.push(group);
+            sourceGroupCounts[primarySource] = currentCount + 1;
+          } else {
+            console.log(`[Aggregate] Skipping GDELT group - no valid descriptions`);
+          }
+        }
+      }
     }
     
     groupsToSummarize = diversifiedGroups.slice(0, GROUPS_TO_SUMMARIZE);
