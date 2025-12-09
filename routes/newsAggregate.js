@@ -157,15 +157,37 @@ router.get('/aggregate', async (req, res) => {
       }
     }
 
-    // Warn if any source returned zero articles
+    // Warn if any source returned zero articles and add to warnings
     if (guardianCount === 0) {
-      console.warn('[Aggregate] WARNING: Guardian returned 0 articles - check API key and query');
+      const warningMsg = 'Guardian returned 0 articles - check API key and query';
+      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
+      if (!warnings.some(w => w.includes('Guardian'))) {
+        warnings.push(warningMsg);
+      }
     }
     if (gdeltCount === 0) {
-      console.warn('[Aggregate] WARNING: GDELT returned 0 articles - check API endpoint');
+      const warningMsg = 'GDELT returned 0 articles - check API endpoint and query';
+      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
+      if (!warnings.some(w => w.includes('GDELT'))) {
+        warnings.push(warningMsg);
+      }
     }
     if (currentsCount === 0) {
-      console.warn('[Aggregate] WARNING: Currents returned 0 articles - check API key and query');
+      const warningMsg = 'Currents returned 0 articles - check API key and query';
+      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
+      if (!warnings.some(w => w.includes('Currents'))) {
+        warnings.push(warningMsg);
+      }
+    }
+    
+    // Log which sources succeeded
+    const successfulSources = [];
+    if (guardianCount > 0) successfulSources.push(`Guardian (${guardianCount})`);
+    if (gdeltCount > 0) successfulSources.push(`GDELT (${gdeltCount})`);
+    if (currentsCount > 0) successfulSources.push(`Currents (${currentsCount})`);
+    
+    if (successfulSources.length > 0) {
+      console.log(`[Aggregate] Successfully fetched articles from: ${successfulSources.join(', ')}`);
     }
 
     // Critical: If ALL sources failed, we have a problem

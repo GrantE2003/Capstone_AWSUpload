@@ -57,7 +57,7 @@ Return ONLY valid JSON with this exact shape:
 - NUMBERS: Specific statistics, figures, amounts, or data points
 - BACKGROUND: Relevant context that helps understand the story
 
-Do not mention sources or compare them. Write in clear, engaging prose that makes readers feel fully informed. This summary should provide complete understanding of the story."
+CRITICAL: Do NOT mention source names (Guardian, GDELT, Currents, etc.) or include any source references in the summary. Do NOT include article titles or any metadata. The summary must contain ONLY the synthesized description of the news story - no source attribution, no titles, no references like "[SOURCE]" or "[GUARDIAN]". Write in clear, engaging prose that makes readers feel fully informed. This summary should provide complete understanding of the story."
 }`;
 
     let apiResponse;
@@ -109,9 +109,27 @@ Do not mention sources or compare them. Write in clear, engaging prose that make
       ? parsed.groupTitle.trim()
       : '';
 
-    const summary = rawSummary && rawSummary.length > 20
+    // Clean summary: Remove any source names, titles, or reference markers
+    let cleanedSummary = rawSummary && rawSummary.length > 20
       ? rawSummary
       : generateBasicSummary(group).summary;
+    
+    if (cleanedSummary && typeof cleanedSummary === 'string') {
+      cleanedSummary = cleanedSummary
+        // Remove source references like [GUARDIAN], [GDELT], [CURRENTS], etc.
+        .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
+        // Remove patterns like "According to [SOURCE]" or "From [SOURCE]"
+        .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
+        // Remove standalone source names in brackets
+        .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
+        // Remove title references if they appear
+        .replace(/title:\s*["'][^"']*["']/gi, '')
+        // Clean up extra whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    const summary = cleanedSummary;
 
     // Clean up / regenerate title if it’s too generic
     const genericPatterns = ['news story', 'story 1', 'story 2', 'latest news', 'news coverage', 'breaking news'];

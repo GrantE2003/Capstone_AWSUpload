@@ -775,7 +775,13 @@ app.get('/api/guardian', async (req, res) => {
 - NUMBERS: Specific statistics, figures, amounts, or data points
 - BACKGROUND: Relevant context that helps understand the story
 
-Make this summary extremely informative and useful - readers should feel they have a complete understanding of the story. Write in engaging, clear prose:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
+CRITICAL: Your summary must contain ONLY the synthesized description of the news story. Do NOT include:
+- The article title
+- Source names (Guardian, GDELT, Currents, etc.)
+- References like "[GUARDIAN - Article 1]" or "[SOURCE]"
+- Any metadata or formatting markers
+
+Write in engaging, clear prose that stands alone without any source attribution or title references:\n\nArticle Content:\n${text}`
             }
           ],
           max_tokens: 1000,
@@ -814,7 +820,21 @@ Make this summary extremely informative and useful - readers should feel they ha
           });
         }
 
-        console.log('[Summarize] Returning summary to frontend, length:', aiSummary.length);
+        // Clean summary: Remove any source names, titles, or reference markers
+        aiSummary = aiSummary
+          // Remove source references like [GUARDIAN], [GDELT], [CURRENTS], etc.
+          .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
+          // Remove patterns like "According to [SOURCE]" or "From [SOURCE]"
+          .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
+          // Remove standalone source names in brackets
+          .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
+          // Remove title references if they appear
+          .replace(/title:\s*["'][^"']*["']/gi, '')
+          // Clean up extra whitespace
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        console.log('[Summarize] Returning cleaned summary to frontend, length:', aiSummary.length);
         return res.json({ aiSummary });
 
       } catch (error) {
