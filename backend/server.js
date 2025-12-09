@@ -701,14 +701,15 @@ function filterArticlesByCountry(articles, countryCode, section, includeInternat
 }
 
 // =====================================================================
-// 1) SIMPLE SEARCH ENDPOINT FOR search_results_loader.js
+// 1) SEARCH ENDPOINT - Uses multi-source aggregation (Guardian, Currents, Mediastack, GDELT)
 //    GET /api/search?q=...&country=US
+//    Calls the aggregate endpoint internally and formats response for search_results_loader.js
 // =====================================================================
 app.get('/api/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    const limit = Number(req.query.limit) || 30;
     const country = req.query.country || '';
+    const limit = Number(req.query.limit) || 30;
 
     console.log('[Search] Request:', { q, country, limit });
 
@@ -716,70 +717,58 @@ app.get('/api/search', async (req, res) => {
       return res.status(400).json({ error: 'Missing search query (?q=...)' });
     }
 
-    // Mock mode – just filter mock articles by title
-    if (MOCK_MODE) {
-      console.warn('[Search] MOCK_MODE enabled – using mock articles only');
-      const filtered = mockData.articles.filter(a =>
-        a.title.toLowerCase().includes(q.toLowerCase())
-      );
-      const articles = filtered.slice(0, limit).map(a => ({
-        title: a.title,
-        description: '',
-        url: a.url,
-        publishedAt: a.publishedAt,
-        sourceName: 'Mock'
-      }));
-      return res.json({ articles });
+    // Make internal HTTP request to aggregate endpoint
+    const baseUrl = `http://localhost:${PORT}`;
+    const aggregateUrl = `${baseUrl}/api/news/aggregate?query=${encodeURIComponent(q)}${country ? `&country=${encodeURIComponent(country)}` : ''}&page=1`;
+    
+    console.log('[Search] Calling aggregate endpoint:', aggregateUrl);
+    
+    const aggregateResponse = await axios.get(aggregateUrl);
+    const aggregateData = aggregateResponse.data;
+    
+    console.log('[Search] Aggregate returned', aggregateData.groupedArticles?.length || 0, 'groups');
+    
+    // Extract all articles from grouped articles and raw articles
+    const allArticles = [];
+    
+    // Add articles from grouped articles
+    if (aggregateData.groupedArticles && Array.isArray(aggregateData.groupedArticles)) {
+      aggregateData.groupedArticles.forEach(group => {
+        if (group.articles && Array.isArray(group.articles)) {
+          allArticles.push(...group.articles);
+        }
+      });
     }
-
-    // Build Guardian params
-    const params = {
-      'api-key': GUARDIAN_API_KEY,
-      'show-fields': 'trailText,bodyText',
-      'page-size': Math.min(limit, 50),
-      'order-by': 'newest'
-    };
-
-    let searchQuery = q;
-    // Optional: apply country in text query, but we do NOT filter aggressively here
-    if (country) {
-      searchQuery = buildQueryWithCountry(searchQuery, country);
-      console.log('[Search] Query with country:', searchQuery);
+    
+    // Add raw articles if available
+    if (aggregateData.rawArticles && Array.isArray(aggregateData.rawArticles)) {
+      allArticles.push(...aggregateData.rawArticles);
     }
-    params.q = searchQuery;
-
-    console.log('[Search] Guardian call:', {
-      url: `${GUARDIAN_BASE_URL}/search`,
-      params
-    });
-
-    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
-
-
-
-
-    if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
+    
+    // Remove duplicates based on URL
+    const uniqueArticles = [];
+    const seenUrls = new Set();
+    for (const article of allArticles) {
+      const url = article.url || article.link || '';
+      if (url && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        uniqueArticles.push({
+          title: article.title || 'Untitled',
+          description: article.description || '',
+          url: url,
+          publishedAt: article.publishedAt || article.published || '',
+          sourceName: article.sourceName || article.source || 'Unknown'
+        });
+      }
     }
-
-    const results = response.data.response.results || [];
-    console.log('[Search] Guardian returned', results.length, 'articles');
-
-    const articles = results.slice(0, limit).map(a => ({
-      title: a.webTitle,
-      description: a.fields?.trailText || '',
-      url: a.webUrl,
-      publishedAt: a.webPublicationDate,
-      sourceName: 'The Guardian'
-    }));
-
+    
+    // Limit to requested number
+    const articles = uniqueArticles.slice(0, limit);
+    
+    console.log('[Search] Returning', articles.length, 'articles from multiple sources');
     return res.json({ articles });
   } catch (err) {
     console.error('[Search] ERROR:', err.message);
-    if (err.response) {
-      console.error('  Status:', err.response.status);
-      console.error('  Data:', JSON.stringify(err.response.data, null, 2));
-    }
     res.status(500).json({
       error: err.message || 'Internal server error'
     });
