@@ -566,8 +566,19 @@ const API_BASE = (function () {
           hasRawArticles: !!data.rawArticles,
           rawArticlesLength: data.rawArticles?.length || 0,
           noResults: data.noResults,
-          warnings: data.warnings
+          warnings: data.warnings,
+          fullData: data // Log entire data object for debugging
         });
+
+        // If we have raw articles but no groups, show raw articles immediately
+        if (data.rawArticles && data.rawArticles.length > 0 && (!data.groupedArticles || data.groupedArticles.length === 0)) {
+          console.log('[Search Results] No groups but have', data.rawArticles.length, 'raw articles - displaying them immediately');
+          articlesContainer.innerHTML = '<div class="card"><p style="font-weight: bold; margin-bottom: 15px;">Found ' + data.rawArticles.length + ' articles:</p></div>';
+          data.rawArticles.slice(0, 20).forEach(article => {
+            renderRawArticle(article, articlesContainer);
+          });
+          return; // Exit early
+        }
 
         if (data.groupedArticles && data.groupedArticles.length > 0) {
           // Less aggressive filtering - only filter out groups that are clearly title-only
