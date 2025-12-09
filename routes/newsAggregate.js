@@ -849,15 +849,22 @@ router.get('/aggregate', async (req, res) => {
     // This is a second check in case the first fallback didn't work
     if (isSearch && summarizedGroups.length === 0 && articlesWithSource.length > 0) {
       console.log('[Aggregate] SEARCH MODE: Still no groups after summarization, creating fallback groups from', articlesWithSource.length, 'articles');
-      const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2).map((article, index) => ({
-        groupId: `fallback-${index}`,
-        groupTitle: article.title || 'Untitled article',
-        summary: article.description || 'No summary available.',
-        aiSummary: article.description || 'No summary available.',
-        articles: [article],
-        sourceCount: 1,
-        sources: [article.sourceName || article.source || 'Unknown']
-      }));
+      const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 3).map((article, index) => {
+        // Ensure description is at least 20 characters for filtering
+        const description = article.description && article.description.trim().length >= 20 
+          ? article.description 
+          : (article.description || 'Article from ' + (article.sourceName || 'news source') + '.');
+        
+        return {
+          groupId: `fallback-${index}`,
+          groupTitle: article.title || 'Untitled article',
+          summary: description,
+          aiSummary: description,
+          articles: [article],
+          sourceCount: 1,
+          sources: [article.sourceName || article.source || 'Unknown']
+        };
+      });
       summarizedGroups.push(...fallbackGroups);
       console.log('[Aggregate] Created', fallbackGroups.length, 'fallback groups from individual articles');
     }
