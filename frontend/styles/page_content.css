@@ -17,14 +17,14 @@ main {
   margin: 2rem auto 0;
   padding: 0 1rem 2.5rem;
 
-  /* Styles the Quick Link Cards - Uniform clean color scheme */
+  /* Styles the Quick Link Cards - Uniform clean color scheme with royal blue accents */
   --bg: #f8f9fa;
   --text: #212529;
   --muted: #6c757d;
   --header-bg: var(--accent);
   --border: #dee2e6;
-  --accent: #495057;
-  --accent-hover: #343a40;
+  --accent: #4169E1; /* Royal blue */
+  --accent-hover: #1E3A8A; /* Darker royal blue */
   --pill-bg: #ffffff;
   --pill-text: #212529;
   --card-bg: #ffffff;

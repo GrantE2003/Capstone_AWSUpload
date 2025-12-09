@@ -199,29 +199,33 @@ router.get('/aggregate', async (req, res) => {
     }
 
     // Balance articles from each source to prevent one source from dominating
-    // Take up to 30 articles from each source to ensure diversity
-    const MAX_ARTICLES_PER_SOURCE = 30;
+    // GDELT is lowest priority - take fewer articles from it
+    const MAX_ARTICLES_GUARDIAN = 30;
+    const MAX_ARTICLES_CURRENTS = 30;
+    const MAX_ARTICLES_GDELT = 15; // Lower priority - fewer articles
+    
     const balancedGuardian = Array.isArray(guardianArticles) 
-      ? guardianArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      ? guardianArticles.slice(0, MAX_ARTICLES_GUARDIAN) 
       : [];
     const balancedGdelt = Array.isArray(gdeltArticles) 
-      ? gdeltArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      ? gdeltArticles.slice(0, MAX_ARTICLES_GDELT) 
       : [];
     const balancedCurrents = Array.isArray(currentsArticles) 
-      ? currentsArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      ? currentsArticles.slice(0, MAX_ARTICLES_CURRENTS) 
       : [];
 
     console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}`);
 
     // Combine all normalized articles into ONE pool before grouping
-    // Interleave articles from different sources to improve cross-source grouping
+    // Prioritize Guardian and Currents over GDELT in interleaving
     const allArticles = [];
-    const maxLength = Math.max(balancedGuardian.length, balancedGdelt.length, balancedCurrents.length);
+    const maxLength = Math.max(balancedGuardian.length, balancedCurrents.length, balancedGdelt.length);
     
     for (let i = 0; i < maxLength; i++) {
+      // Priority order: Guardian, Currents, then GDELT
       if (i < balancedGuardian.length) allArticles.push(balancedGuardian[i]);
-      if (i < balancedGdelt.length) allArticles.push(balancedGdelt[i]);
       if (i < balancedCurrents.length) allArticles.push(balancedCurrents[i]);
+      if (i < balancedGdelt.length) allArticles.push(balancedGdelt[i]);
     }
 
     // Add source field to each article for grouping logic
@@ -316,6 +320,27 @@ router.get('/aggregate', async (req, res) => {
 
     // Filter groups to remove duplicates and ensure quality
     const filteredGroups = groups.filter(group => {
+      // Filter out groups that are all GDELT with no valid descriptions
+      const allGdelt = group.articles.every(a => {
+        const source = (a.source || a.sourceName || '').toLowerCase();
+        return source === 'gdelt';
+      });
+      
+      if (allGdelt) {
+        // Check if all GDELT articles have "No description available"
+        const allNoDescription = group.articles.every(a => {
+          const desc = (a.description || '').trim();
+          return !desc || desc === 'No description available.' || desc.length < 50;
+        });
+        
+        if (allNoDescription) {
+          console.log(
+            `[Aggregate] Filtering out group ${group.groupId} - all GDELT articles have no valid descriptions`
+          );
+          return false;
+        }
+      }
+      
       if (group.articles.length > 1) {
         const normalizedTitles = group.articles.map(a => {
           const title = (a.title || '').toLowerCase().trim();
@@ -388,7 +413,17 @@ router.get('/aggregate', async (req, res) => {
       return Math.max(0, 500 - (hoursAgo - 48) * 10);
     };
 
-    // Sort groups with priority: multi-source first (3 sources > 2 sources > 1 source), then recency
+    // Helper to get source priority (lower number = higher priority)
+    const getSourcePriority = (group) => {
+      const sources = new Set(group.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
+      if (sources.has('guardian') && !sources.has('gdelt')) return 1; // Guardian-only or Guardian+Currents
+      if (sources.has('currents') && !sources.has('gdelt')) return 2; // Currents-only
+      if (sources.has('gdelt') && !sources.has('guardian') && !sources.has('currents')) return 4; // GDELT-only (lowest)
+      if (sources.has('guardian') || sources.has('currents')) return 3; // Mixed with Guardian/Currents
+      return 5; // Unknown
+    };
+
+    // Sort groups with priority: multi-source first, then source quality (Guardian > Currents > GDELT), then recency
     filteredGroups.sort((a, b) => {
       const aSourceCount = getUniqueSourceCount(a);
       const bSourceCount = getUniqueSourceCount(b);
@@ -404,6 +439,13 @@ router.get('/aggregate', async (req, res) => {
       // If same source count, prioritize multi-source over single-source
       if (aIsMultiSource && !bIsMultiSource) return -1;
       if (!aIsMultiSource && bIsMultiSource) return 1;
+
+      // If same source count and both single-source or both multi-source, prioritize by source quality
+      const aSourcePriority = getSourcePriority(a);
+      const bSourcePriority = getSourcePriority(b);
+      if (aSourcePriority !== bSourcePriority) {
+        return aSourcePriority - bSourcePriority; // Lower priority number = higher quality
+      }
 
       const aRecency = getRecencyScore(a);
       const bRecency = getRecencyScore(b);
@@ -444,8 +486,19 @@ router.get('/aggregate', async (req, res) => {
         groupsBySource[source].push(group);
       });
 
-      // Interleave groups from different sources round-robin style
-      const sourceKeys = Object.keys(groupsBySource);
+      // Interleave groups from different sources with priority: Guardian > Currents > GDELT
+      // Sort source keys by priority (guardian first, currents second, gdelt last)
+      const sourcePriority = ['guardian', 'currents', 'gdelt'];
+      const sourceKeys = Object.keys(groupsBySource).sort((a, b) => {
+        const aPriority = sourcePriority.indexOf(a.toLowerCase());
+        const bPriority = sourcePriority.indexOf(b.toLowerCase());
+        // If not in priority list, put at end
+        if (aPriority === -1 && bPriority === -1) return 0;
+        if (aPriority === -1) return 1;
+        if (bPriority === -1) return -1;
+        return aPriority - bPriority;
+      });
+      
       let maxLength = Math.max(...Object.values(groupsBySource).map(arr => arr.length));
       
       for (let i = 0; i < maxLength; i++) {
@@ -495,26 +548,59 @@ router.get('/aggregate', async (req, res) => {
     }
     
     // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
-    // This is especially important for search results where one source might dominate
-    const MAX_GROUPS_PER_SOURCE = Math.ceil(GROUPS_TO_SUMMARIZE / 2); // Max 50% from one source
+    // GDELT has much lower limits since it produces worst summaries
+    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_GDELT = Math.ceil(GROUPS_TO_SUMMARIZE * 0.2); // 20% max (lowest priority)
+    
     const sourceGroupCounts = {};
     const diversifiedGroups = [];
     
     for (const group of groupsToSummarize) {
-      const primarySource = group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown';
+      const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
       const sourceCount = getUniqueSourceCount(group);
       
-      // Multi-source groups always included
+      // Multi-source groups always included (unless all GDELT with no descriptions)
       if (sourceCount >= 2) {
-        diversifiedGroups.push(group);
+        // Check if it's a multi-source group but all are GDELT with no descriptions
+        const allGdeltNoDesc = group.articles.every(a => {
+          const source = (a.source || a.sourceName || '').toLowerCase();
+          const desc = (a.description || '').trim();
+          return source === 'gdelt' && (!desc || desc === 'No description available.' || desc.length < 50);
+        });
+        
+        if (!allGdeltNoDesc) {
+          diversifiedGroups.push(group);
+        } else {
+          console.log(`[Aggregate] Skipping multi-source group - all GDELT with no valid descriptions`);
+        }
       } else {
-        // Single-source groups: limit per source
+        // Single-source groups: apply source-specific limits
+        let maxAllowed = MAX_GROUPS_GDELT; // Default to GDELT limit (lowest)
+        if (primarySource === 'guardian') {
+          maxAllowed = MAX_GROUPS_GUARDIAN;
+        } else if (primarySource === 'currents') {
+          maxAllowed = MAX_GROUPS_CURRENTS;
+        }
+        
         const currentCount = sourceGroupCounts[primarySource] || 0;
-        if (currentCount < MAX_GROUPS_PER_SOURCE) {
+        if (currentCount < maxAllowed) {
+          // Additional check: don't include GDELT-only groups with no descriptions
+          if (primarySource === 'gdelt') {
+            const hasValidDescription = group.articles.some(a => {
+              const desc = (a.description || '').trim();
+              return desc && desc !== 'No description available.' && desc.length >= 50;
+            });
+            if (!hasValidDescription) {
+              console.log(`[Aggregate] Skipping GDELT group - no valid descriptions`);
+              continue;
+            }
+          }
+          
           diversifiedGroups.push(group);
           sourceGroupCounts[primarySource] = currentCount + 1;
         } else {
-          console.log(`[Aggregate] Skipping ${primarySource} group to ensure source diversity (already have ${currentCount} groups from this source)`);
+          console.log(`[Aggregate] Skipping ${primarySource} group to ensure source diversity (already have ${currentCount} groups from this source, max is ${maxAllowed})`);
         }
       }
     }
@@ -597,6 +683,22 @@ router.get('/aggregate', async (req, res) => {
           ];
           const sourceCount = uniqueSources.length;
 
+          // Check if summary is just the title - if so, skip this group
+          const firstArticle = batch[index].articles[0];
+          const articleTitle = firstArticle?.title || groupTitle || '';
+          if (articleTitle) {
+            const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            const normalizedSummary = summary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            
+            // If summary is essentially the title, skip this group
+            if (normalizedSummary === normalizedTitle || 
+                normalizedSummary.startsWith(normalizedTitle) ||
+                normalizedTitle.startsWith(normalizedSummary)) {
+              console.log(`[Aggregate] Skipping group ${result.value.groupId} - summary is just the title`);
+              return; // Skip adding this group
+            }
+          }
+          
           summarizedGroups.push({
             groupId: result.value.groupId,
             groupTitle: groupTitle,
@@ -637,6 +739,21 @@ router.get('/aggregate', async (req, res) => {
             )
           ];
           const sourceCount = uniqueSources.length;
+
+          // Check if fallback summary is just the title - if so, skip this group
+          const articleTitle = firstArticle?.title || groupTitle || '';
+          if (articleTitle && fallbackSummary) {
+            const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            const normalizedSummary = fallbackSummary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+            
+            // If fallback summary is essentially the title, skip this group
+            if (normalizedSummary === normalizedTitle || 
+                normalizedSummary.startsWith(normalizedTitle) ||
+                normalizedTitle.startsWith(normalizedSummary)) {
+              console.log(`[Aggregate] Skipping group ${batch[index].groupId} - fallback summary is just the title`);
+              return; // Skip adding this group
+            }
+          }
 
           summarizedGroups.push({
             groupId: batch[index].groupId,
