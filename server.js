@@ -1014,21 +1014,24 @@ app.get('/api/topics', (req, res) => {
   res.json(mockData.topics);
 });
 
-// Search endpoint - queries all three sources and returns normalized articles
+// Search endpoint - simple Guardian-only search
 app.get('/api/search', async (req, res) => {
   try {
-    const query = req.query.q || '';
-    const { section, page = 1, country } = req.query;
-    
-    console.log('[Search] Request received:', { query, section, page, country });
-    
+    const query = (req.query.q || '').trim();
+
+    console.log('[Search] Request received:', { query });
+
+    if (!query) {
+      return res.status(400).json({ error: 'Missing search query (?q=...)' });
+    }
+
+    // If we don't have a Guardian key, just use mock data
     if (MOCK_MODE) {
+      console.warn('[Search] MOCK_MODE is ON – using mock articles only');
       const filteredArticles = mockData.articles.filter(article => {
-        if (section && article.sectionId !== section) return false;
-        if (query && !article.title.toLowerCase().includes(query.toLowerCase())) return false;
-        return true;
+        return article.title.toLowerCase().includes(query.toLowerCase());
       });
-      
+
       return res.json({
         articles: filteredArticles.map(a => ({
           title: a.title,
@@ -1040,109 +1043,64 @@ app.get('/api/search', async (req, res) => {
       });
     }
 
-    const { fetchGuardianArticles } = require('./services/guardianClient');
-    const { fetchGdeltArticles } = require('./services/gdeltClient');
-    const { fetchCurrentsArticles } = require('./services/currentsClient');
-
-    const newsQuery = {
-      query: query,
-      country: country || undefined,
-      category: section || undefined
+    // Guardian search parameters
+    const params = {
+      'api-key': GUARDIAN_API_KEY,
+      'q': query,
+      'page-size': 30,                  // grab up to 30 results
+      'order-by': 'newest',
+      'show-fields': 'trailText,bodyText'
     };
 
-    console.log('[Search] Fetching from all three sources with query:', query || '(empty)');
-    console.log('[Search] Query parameters:', JSON.stringify(newsQuery, null, 2));
+    console.log('[Search] Calling Guardian /search with params:', params);
 
-    const [guardianResults, gdeltResults, currentsResults] = await Promise.allSettled([
-      fetchGuardianArticles(newsQuery).catch(err => {
-        console.error('[Search] Guardian API FAILED:');
-        console.error('   Error:', err.message);
-        if (err.response) {
-          console.error('   Status:', err.response.status);
-          console.error('   Data:', JSON.stringify(err.response.data, null, 2));
-        }
-        return [];
-      }),
-      fetchGdeltArticles(newsQuery).catch(err => {
-        console.error('[Search] GDELT API FAILED:');
-        console.error('   Error:', err.message);
-        if (err.response) {
-          console.error('   Status:', err.response.status);
-          console.error('   Data:', JSON.stringify(err.response.data, null, 2));
-        }
-        return [];
-      }),
-      fetchCurrentsArticles(newsQuery).catch(err => {
-        console.error('[Search] Currents API FAILED:');
-        console.error('   Error:', err.message);
-        if (err.response) {
-          console.error('   Status:', err.response.status);
-          console.error('   Data:', JSON.stringify(err.response.data, null, 2));
-        }
-        return [];
-      })
-    ]);
+    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
 
-    const guardianArticles = guardianResults.status === 'fulfilled' ? guardianResults.value : [];
-    const gdeltArticles = gdeltResults.status === 'fulfilled' ? gdeltResults.value : [];
-    const currentsArticles = currentsResults.status === 'fulfilled' ? currentsResults.value : [];
+    if (!response.data || response.data.response.status !== 'ok') {
+      console.error('[Search] Guardian error:', response.data);
+      throw new Error('Guardian API returned an error');
+    }
 
-    console.log('[Search] Summary of results:');
-    console.log(`   Guardian: ${Array.isArray(guardianArticles) ? guardianArticles.length : 0} articles`);
-    console.log(`   GDELT: ${Array.isArray(gdeltArticles) ? gdeltArticles.length : 0} articles`);
-    console.log(`   Currents: ${Array.isArray(currentsArticles) ? currentsArticles.length : 0} articles`);
+    const results = response.data.response.results || [];
+    console.log('[Search] Guardian returned', results.length, 'results');
 
-    const allArticles = [
-      ...(Array.isArray(guardianArticles) ? guardianArticles : []),
-      ...(Array.isArray(gdeltArticles) ? gdeltArticles : []),
-      ...(Array.isArray(currentsArticles) ? currentsArticles : [])
-    ];
+    // Normalize into { title, description, url, publishedAt, sourceName }
+    const articles = results.map(item => {
+      const fields = item.fields || {};
+      const body = fields.bodyText || '';
+      const trail = fields.trailText || '';
 
-    console.log(`[Search] Combined ${allArticles.length} articles from all sources`);
+      // Take a short snippet as description
+      const descriptionSource = body || trail;
+      const description = descriptionSource
+        ? descriptionSource.slice(0, 400) + (descriptionSource.length > 400 ? '…' : '')
+        : 'No description available.';
 
-    const validatedArticles = allArticles.map(article => {
       return {
-        title: article.title || 'No title',
-        description: article.description || 'No description available.',
-        url: article.url || '',
-        publishedAt: article.publishedAt || '',
-        sourceName: article.sourceName || 'Unknown Source'
+        title: item.webTitle || 'No title',
+        description,
+        url: item.webUrl || '',
+        publishedAt: item.webPublicationDate || '',
+        sourceName: 'The Guardian'
       };
-    }).filter(article => {
-      const hasUrl = article.url && article.url.trim() !== '';
-      const hasTitle = article.title && article.title.trim() !== '' && article.title !== 'No title';
-      return hasUrl && hasTitle;
-    });
+    }).filter(a => a.url && a.title && a.title !== 'No title');
 
-    console.log(`[Search] Validated ${validatedArticles.length} articles`);
+    console.log('[Search] Returning', articles.length, 'normalized articles');
 
-    const seenUrls = new Set();
-    const deduplicatedArticles = validatedArticles.filter(article => {
-      if (!article.url) return false;
-      const normalizedUrl = article.url.toLowerCase().trim();
-      if (seenUrls.has(normalizedUrl)) {
-        return false;
-      }
-      seenUrls.add(normalizedUrl);
-      return true;
-    });
-
-    console.log(`[Search] Deduplicated to ${deduplicatedArticles.length} unique articles`);
-
-    const response = {
-      articles: deduplicatedArticles
-    };
-
-    console.log(`[Search] Successfully returning ${deduplicatedArticles.length} articles`);
-    res.json(response);
+    return res.json({ articles });
 
   } catch (error) {
-    console.error('Search error:', error.message);
-    res.status(500).json({ 
-      error: error.message || 'Internal server error' 
+    console.error('[Search] ERROR:', error.message);
+    if (error.response) {
+      console.error('[Search] Guardian status:', error.response.status);
+      console.error('[Search] Guardian data:', JSON.stringify(error.response.data, null, 2));
+    }
+    res.status(500).json({
+      error: error.message || 'Internal server error'
     });
   }
 });
+
 
 // Section endpoint
 app.get('/api/section/:id', async (req, res) => {
