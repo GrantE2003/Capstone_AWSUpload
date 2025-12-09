@@ -322,6 +322,7 @@ router.get('/aggregate', async (req, res) => {
     if (articlesWithSource.length === 0) {
       // For search queries, return a clear "No articles found" message
       if (isSearch) {
+        console.log('[Aggregate] No articles found from any source for search query:', query);
         return res.json({
           query: query || '',
           country: country || undefined,
@@ -332,6 +333,7 @@ router.get('/aggregate', async (req, res) => {
           noResults: true
         });
       }
+      console.log('[Aggregate] No articles found from any source for category:', category);
       return res.json({
         query: query || '',
         country: country || undefined,
@@ -341,6 +343,8 @@ router.get('/aggregate', async (req, res) => {
         warnings: warnings.length > 0 ? warnings : ['No articles found from any source.']
       });
     }
+    
+    console.log('[Aggregate] Proceeding with', articlesWithSource.length, 'articles to group and summarize');
 
     // Group similar articles ACROSS ALL SOURCES
     // Use lower threshold for search queries to group articles with similar titles more aggressively
@@ -749,18 +753,16 @@ router.get('/aggregate', async (req, res) => {
           ];
           const sourceCount = uniqueSources.length;
 
-          // Check if summary is just the title - if so, skip this group
+          // Only skip if summary is EXACTLY the title (less aggressive filtering)
           const firstArticle = batch[index].articles[0];
           const articleTitle = firstArticle?.title || groupTitle || '';
-          if (articleTitle) {
+          if (articleTitle && summary) {
             const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
             const normalizedSummary = summary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
             
-            // If summary is essentially the title, skip this group
-            if (normalizedSummary === normalizedTitle || 
-                normalizedSummary.startsWith(normalizedTitle) ||
-                normalizedTitle.startsWith(normalizedSummary)) {
-              console.log(`[Aggregate] Skipping group ${result.value.groupId} - summary is just the title`);
+            // Only skip if summary is EXACTLY the title (not just similar)
+            if (normalizedSummary === normalizedTitle && normalizedSummary.length < 100) {
+              console.log(`[Aggregate] Skipping group ${result.value.groupId} - summary is exactly the title`);
               return; // Skip adding this group
             }
           }
@@ -806,17 +808,15 @@ router.get('/aggregate', async (req, res) => {
           ];
           const sourceCount = uniqueSources.length;
 
-          // Check if fallback summary is just the title - if so, skip this group
+          // Only skip if fallback summary is EXACTLY the title (less aggressive filtering)
           const articleTitle = firstArticle?.title || groupTitle || '';
           if (articleTitle && fallbackSummary) {
             const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
             const normalizedSummary = fallbackSummary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
             
-            // If fallback summary is essentially the title, skip this group
-            if (normalizedSummary === normalizedTitle || 
-                normalizedSummary.startsWith(normalizedTitle) ||
-                normalizedTitle.startsWith(normalizedSummary)) {
-              console.log(`[Aggregate] Skipping group ${batch[index].groupId} - fallback summary is just the title`);
+            // Only skip if fallback summary is EXACTLY the title (not just similar)
+            if (normalizedSummary === normalizedTitle && normalizedSummary.length < 100) {
+              console.log(`[Aggregate] Skipping group ${batch[index].groupId} - fallback summary is exactly the title`);
               return; // Skip adding this group
             }
           }
@@ -832,6 +832,15 @@ router.get('/aggregate', async (req, res) => {
           });
         }
       });
+    }
+
+    // Log summary generation results
+    console.log(`[Aggregate] Generated ${summarizedGroups.length} summarized groups from ${groupsToSummarize.length} groups to summarize`);
+    
+    // If no groups were summarized but we have articles, log a warning
+    if (summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+      console.warn('[Aggregate] WARNING: No groups were successfully summarized, but we have', articlesWithSource.length, 'raw articles');
+      console.warn('[Aggregate] This might indicate an issue with the summarization process');
     }
 
     // Apply universal pagination - ALL views paginate at 18 groups per page
@@ -899,6 +908,14 @@ router.get('/aggregate', async (req, res) => {
       articlesWithSource.length,
       'raw articles'
     );
+    
+    // For search queries, if we have articles but no groups, log detailed info
+    if (isSearch && finalGroups.length === 0 && articlesWithSource.length > 0) {
+      console.warn('[Aggregate] SEARCH MODE: No groups to return, but we have', articlesWithSource.length, 'raw articles');
+      console.warn('[Aggregate] This might indicate all groups were filtered out or summarization failed');
+      console.warn('[Aggregate] Frontend should display raw articles as fallback');
+    }
+    
     res.json(responsePayload);
   } catch (error) {
     console.error('[Aggregate] ========================================');

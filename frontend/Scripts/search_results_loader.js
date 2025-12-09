@@ -561,48 +561,55 @@ const API_BASE = (function () {
         }
 
         if (data.groupedArticles && data.groupedArticles.length > 0) {
-          // Filter out groups without valid summaries before rendering
+          // Less aggressive filtering - only filter out groups that are clearly title-only
           const groupsWithSummaries = data.groupedArticles.filter(group => {
-            // Check if group is marked as title-only summary
+            // Only filter if explicitly marked as title-only
             if (group.isTitleOnlySummary === true) {
               console.log('[Search Results] Filtering out group - marked as title-only summary');
               return false;
             }
             
+            // Allow groups even if summary is short or missing - they can still be useful
             const summary = group.aiSummary || group.summary;
-            if (!summary || summary.trim().length < 50) {
-              console.log('[Search Results] Filtering out group without valid summary');
-              return false;
-            }
             
-            // Check if summary is just the title
-            const primaryArticle = (group.articles && group.articles[0]) || {};
-            const articleTitle = primaryArticle.title || group.groupTitle || '';
-            if (articleTitle) {
-              const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
-              const normalizedSummary = String(summary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
-              
-              if (normalizedSummary === normalizedTitle || 
-                  normalizedSummary.startsWith(normalizedTitle) ||
-                  normalizedTitle.startsWith(normalizedSummary)) {
-                console.log('[Search Results] Filtering out group - summary is just the title');
-                return false;
+            // Only filter if summary exists and is clearly just the title
+            if (summary && summary.trim().length > 0) {
+              const primaryArticle = (group.articles && group.articles[0]) || {};
+              const articleTitle = primaryArticle.title || group.groupTitle || '';
+              if (articleTitle) {
+                const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+                const normalizedSummary = String(summary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+                
+                // Only filter if summary is EXACTLY the title (not just starts with it)
+                if (normalizedSummary === normalizedTitle) {
+                  console.log('[Search Results] Filtering out group - summary is exactly the title');
+                  return false;
+                }
               }
             }
             
             return true;
           });
           
-          console.log('[Search Results] Filtered to', groupsWithSummaries.length, 'groups with valid summaries (from', data.groupedArticles.length, 'total)');
+          console.log('[Search Results] Filtered to', groupsWithSummaries.length, 'groups (from', data.groupedArticles.length, 'total)');
           console.log('[Search Results] Source breakdown:', groupsWithSummaries.map(g => {
             const sources = [...new Set(g.articles.map(a => a.sourceName || a.source || 'unknown'))];
             return sources.join(', ');
           }));
           
           if (groupsWithSummaries.length === 0) {
-            // All groups were filtered out - show no results message
-            articlesContainer.innerHTML =
-              '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
+            // All groups were filtered out - check if we have raw articles as fallback
+            if (data.rawArticles && data.rawArticles.length > 0) {
+              console.log('[Search Results] No groups passed filter, but have', data.rawArticles.length, 'raw articles - showing them');
+              articlesContainer.innerHTML = '<div class="card"><p style="font-weight: bold; margin-bottom: 15px;">Found ' + data.rawArticles.length + ' articles:</p></div>';
+              data.rawArticles.slice(0, 20).forEach(article => {
+                renderRawArticle(article, articlesContainer);
+              });
+            } else {
+              // No groups and no raw articles - show no results
+              articlesContainer.innerHTML =
+                '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
+            }
           } else {
             groupsWithSummaries.forEach(group => {
               renderStoryGroup(group, articlesContainer);
