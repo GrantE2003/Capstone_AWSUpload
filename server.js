@@ -1101,6 +1101,7 @@ app.post('/api/summarize/search', async (req, res) => {
     });
 
     if (!Array.isArray(articles) || articles.length === 0) {
+      // Still a true "bad request"
       return res.status(400).json({
         error: 'No articles provided for summarization',
         aiSummary: 'Error: No articles provided for summarization.'
@@ -1116,10 +1117,17 @@ app.post('/api/summarize/search', async (req, res) => {
         const content =
           a.content || a.description || a.trailText || a.bodyText || '';
 
-        return `### Article ${idx + 1}\nTitle: ${title}\nSource: ${src}\nPublished: ${date}\n\n${content}\n`;
+        return `### Article ${idx + 1}
+Title: ${title}
+Source: ${src}
+Published: ${date}
+
+${content}
+`;
       })
       .join('\n\n');
 
+    // If no OpenRouter key, always use fallback
     if (!OPENROUTER_API_KEY) {
       console.warn(
         '[Search Summarize] No OpenRouter API key – using simple fallback summary'
@@ -1136,6 +1144,7 @@ app.post('/api/summarize/search', async (req, res) => {
       });
     }
 
+    // --- Call OpenRouter normally ---
     let modelToUse = LLM_MODEL;
     if (!modelToUse.includes('/')) {
       modelToUse = `openai/${modelToUse}`;
@@ -1177,13 +1186,24 @@ app.post('/api/summarize/search', async (req, res) => {
       }
     }
 
+    // If OpenRouter gave nothing useful, fall back instead of erroring
     if (!aiSummary || aiSummary.length === 0) {
-      return res.status(500).json({
-        error: 'Failed to extract summary from API response',
-        aiSummary: 'Error: The AI service returned an invalid response.'
+      console.warn(
+        '[Search Summarize] OpenRouter returned no usable summary – falling back'
+      );
+      const sentences = combinedText
+        .split(/[.!?]+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      const fallback = sentences.slice(0, 10).join('. ') + '.';
+      return res.json({
+        aiSummary:
+          fallback ||
+          'Summary not available. Please read the individual articles for details.'
       });
     }
 
+    // Clean summary
     aiSummary = aiSummary
       .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
       .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
@@ -1192,30 +1212,45 @@ app.post('/api/summarize/search', async (req, res) => {
       .replace(/\s+/g, ' ')
       .trim();
 
+    // ✅ SUCCESS: no `error` field so the frontend is happy
     return res.json({ aiSummary });
   } catch (error) {
-    console.error('[Search Summarize] ERROR:', error.message);
-    let errorMessage =
-      error.message || 'Unable to generate search summary. Please try again later.';
-    if (error.response?.data) {
-      if (error.response.data.error) {
-        if (typeof error.response.data.error === 'string') {
-          errorMessage = error.response.data.error;
-        } else if (error.response.data.error.message) {
-          errorMessage = error.response.data.error.message;
-        } else {
-          errorMessage = JSON.stringify(error.response.data.error);
-        }
-      } else if (error.response.data.message) {
-        errorMessage = error.response.data.message;
-      }
+    // If ANYTHING blows up, log it and still send a fallback summary with 200
+    console.error('[Search Summarize] HARD ERROR, using fallback:', error.message);
+
+    try {
+      const { articles } = req.body || {};
+      const combinedText = (articles || [])
+        .map(a => a.content || a.description || a.trailText || a.bodyText || '')
+        .join(' ');
+
+      const sentences = combinedText
+        .split(/[.!?]+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+      const fallback = sentences.slice(0, 10).join('. ') + '.';
+
+      // IMPORTANT: 200 status, no "error" key so the frontend doesn't treat it as failure
+      return res.json({
+        aiSummary:
+          fallback ||
+          'Summary not available. Please read the individual articles for details.'
+      });
+    } catch (innerErr) {
+      console.error(
+        '[Search Summarize] Fallback also failed:',
+        innerErr.message
+      );
+      // Only in this truly extreme case send a 500
+      return res.status(500).json({
+        error: 'Failed to generate search summary',
+        aiSummary: 'Unable to generate any summary. Please try again later.'
+      });
     }
-    return res.status(500).json({
-      error: 'Failed to generate search summary',
-      aiSummary: errorMessage
-    });
   }
 });
+
 
 // =====================================================================
 // Health + error handlers
