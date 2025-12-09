@@ -37,19 +37,19 @@
 
   // Build URL to your search / aggregate endpoint
 function buildSearchUrl(query) {
-  const countryCode = getCountryCode();
   const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
-
-  // Use the /api/search endpoint and the "q" parameter
   const url = new URL("/api/search", base);
 
   url.searchParams.set("q", query);
-  if (countryCode) url.searchParams.set("country", countryCode);
+  // TEMP: do not send country while we debug
+  // const countryCode = getCountryCode();
+  // if (countryCode) url.searchParams.set("country", countryCode);
 
   const finalUrl = url.toString();
   console.log("[Search Loader] Fetching search from:", finalUrl);
   return finalUrl;
 }
+
 
   // Normalize different article shapes into one shape
   function normalizeArticle(raw) {
