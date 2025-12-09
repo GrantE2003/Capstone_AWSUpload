@@ -263,14 +263,15 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
         }
       }
 
-      if (maxSimilarity >= similarityThreshold) {
+      // Apply cross-source boost BEFORE threshold check to improve grouping
+      const effectiveSimilarity = hasDifferentSource ? maxSimilarity * 1.3 : maxSimilarity; // 30% boost for cross-source
+      
+      if (effectiveSimilarity >= similarityThreshold) {
         // STRONGLY prefer groups with different sources (cross-source grouping)
         if (hasDifferentSource) {
-          // Boost similarity score for cross-source matches to prioritize them
-          const boostedSimilarity = maxSimilarity * 1.2; // 20% boost for cross-source
-          if (boostedSimilarity > bestSimilarity || !bestGroupHasDifferentSource) {
+          if (effectiveSimilarity > bestSimilarity || !bestGroupHasDifferentSource) {
             bestGroup = group;
-            bestSimilarity = boostedSimilarity;
+            bestSimilarity = effectiveSimilarity;
             bestGroupHasDifferentSource = true;
           }
         } else if (!bestGroupHasDifferentSource && maxSimilarity > bestSimilarity) {

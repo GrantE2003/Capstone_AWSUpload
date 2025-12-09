@@ -278,9 +278,19 @@ router.get('/aggregate', async (req, res) => {
     }
 
     // Group similar articles ACROSS ALL SOURCES
-    // Lower threshold to improve cross-source grouping
-    const similarityThreshold = 0.35;
+    // Lower threshold to improve cross-source grouping - articles about same story should group
+    const similarityThreshold = 0.25; // Lowered from 0.35 to group more similar articles
     const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
+    
+    // CRITICAL: Ensure grouping actually happened
+    if (groups.length === articlesWithSource.length) {
+      console.warn('[Aggregate] WARNING: No articles were grouped! All articles are in separate groups.');
+      console.warn('[Aggregate] This suggests the similarity threshold may be too high or grouping logic needs adjustment.');
+    } else {
+      const groupedCount = groups.reduce((sum, g) => sum + g.articles.length, 0);
+      const avgGroupSize = groupedCount / groups.length;
+      console.log(`[Aggregate] Grouping successful: ${articlesWithSource.length} articles -> ${groups.length} groups (avg ${avgGroupSize.toFixed(1)} articles per group)`);
+    }
 
     console.log(
       `\n[Aggregate] Grouped ${articlesWithSource.length} articles into ${groups.length} groups (cross-source grouping)`

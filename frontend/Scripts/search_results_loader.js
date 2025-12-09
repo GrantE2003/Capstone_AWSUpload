@@ -263,24 +263,20 @@ const API_BASE = (function () {
           articleForSummary.headline ||
           "News article";
 
-        // Build comprehensive text from all articles in the group (same as Quick Links)
+        // Build comprehensive text from all articles in the group (EXACT SAME AS QUICK LINKS)
         // Combine descriptions/content from all articles, not the pre-generated group summary
         let textForSummary = "";
         
         if (group.articles && group.articles.length > 0) {
-          // Combine text from all articles in the group
-          const articleTexts = group.articles.map((article, index) => {
-            const source = (article.sourceName || article.source || 'Unknown').toUpperCase();
-            const title = article.title || article.headline || 'No title';
+          // Combine text from all articles in the group - NO SOURCE MARKERS
+          const articleTexts = group.articles.map((article) => {
             const description = article.description || article.trailText || article.snippet || '';
             const content = article.content || article.bodyText || '';
             const fullText = content || description;
             
-            return `[${source} - Article ${index + 1}]
-Title: ${title}
-${fullText ? `Content: ${fullText}` : 'No content available'}
----`;
-          }).filter(text => text.length > 50); // Only include articles with meaningful content
+            // Return ONLY the content, no source markers, no titles
+            return fullText || '';
+          }).filter(text => text && text.trim().length > 20); // Only include articles with meaningful content
           
           textForSummary = articleTexts.join('\n\n');
         }

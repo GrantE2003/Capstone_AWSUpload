@@ -57,7 +57,17 @@ Return ONLY valid JSON with this exact shape:
 - NUMBERS: Specific statistics, figures, amounts, or data points
 - BACKGROUND: Relevant context that helps understand the story
 
-CRITICAL: Do NOT mention source names (Guardian, GDELT, Currents, etc.) or include any source references in the summary. Do NOT include article titles or any metadata. The summary must contain ONLY the synthesized description of the news story - no source attribution, no titles, no references like "[SOURCE]" or "[GUARDIAN]". Write in clear, engaging prose that makes readers feel fully informed. This summary should provide complete understanding of the story."
+CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
+1. The summary must contain ONLY the synthesized description of the news story
+2. Do NOT include article titles anywhere in the summary
+3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
+4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
+5. Do NOT include phrases like "According to [source]" or "From [source]"
+6. Do NOT include any metadata, formatting markers, or attribution
+7. Write in clear, engaging prose that makes readers feel fully informed
+8. Start the summary directly with the story content - do not preface with title or source
+
+The summary should provide complete understanding of the story without any source attribution or title references."
 }`;
 
     let apiResponse;

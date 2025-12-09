@@ -762,7 +762,7 @@ app.get('/api/guardian', async (req, res) => {
             },
             {
               role: 'user',
-              content: `Create a highly detailed, comprehensive summary of this news article that provides maximum information value. Your summary should be 6-10 sentences and include:
+              content: `You are summarizing news articles. Create a highly detailed, comprehensive summary that provides maximum information value. Your summary should be 6-10 sentences and include:
 
 - WHO: All key people, organizations, and entities involved with their specific roles
 - WHAT: The main event, action, or development with specific details
@@ -775,13 +775,18 @@ app.get('/api/guardian', async (req, res) => {
 - NUMBERS: Specific statistics, figures, amounts, or data points
 - BACKGROUND: Relevant context that helps understand the story
 
-CRITICAL: Your summary must contain ONLY the synthesized description of the news story. Do NOT include:
-- The article title
-- Source names (Guardian, GDELT, Currents, etc.)
-- References like "[GUARDIAN - Article 1]" or "[SOURCE]"
-- Any metadata or formatting markers
+CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
+1. Your summary must contain ONLY the synthesized description of the news story
+2. Do NOT include the article title anywhere in your summary
+3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
+4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
+5. Do NOT include phrases like "According to [source]" or "From [source]"
+6. Do NOT include any metadata, formatting markers, or attribution
+7. Write in engaging, clear prose that stands alone without any source attribution or title references
 
-Write in engaging, clear prose that stands alone without any source attribution or title references:\n\nArticle Content:\n${text}`
+Start your summary directly with the story content. Do not preface it with the title or source.
+
+Article Content:\n${text}`
             }
           ],
           max_tokens: 1000,
