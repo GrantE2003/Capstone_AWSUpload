@@ -29,6 +29,18 @@
     return null;
   }
 
+  // NEW: formatDate helper
+  function formatDate(dateString) {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
   // Read `?q=` from URL or lastSearch
   function getSearchQuery() {
     const params = new URLSearchParams(window.location.search);
@@ -36,20 +48,18 @@
   }
 
   // Build URL to your search / aggregate endpoint
-function buildSearchUrl(query) {
-  const countryCode = getCountryCode();
-  const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
-  const url = new URL("/api/search", base);
+  function buildSearchUrl(query) {
+    const countryCode = getCountryCode();
+    const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+    const url = new URL("/api/search", base);
 
-  url.searchParams.set("q", query);
-  if (countryCode) url.searchParams.set("country", countryCode);
+    url.searchParams.set("q", query);
+    if (countryCode) url.searchParams.set("country", countryCode);
 
-  const finalUrl = url.toString();
-  console.log("[Search Loader] Fetching search from:", finalUrl);
-  return finalUrl;
-}
-
-
+    const finalUrl = url.toString();
+    console.log("[Search Loader] Fetching search from:", finalUrl);
+    return finalUrl;
+  }
 
   // Normalize different article shapes into one shape
   function normalizeArticle(raw) {
@@ -293,7 +303,11 @@ function buildSearchUrl(query) {
 
     try {
       const resp = await fetch(apiUrl);
-      console.log("[Search Loader] Search response:", resp.status, resp.statusText);
+      console.log(
+        "[Search Loader] Search response:",
+        resp.status,
+        resp.statusText
+      );
 
       if (!resp.ok) {
         let msg = `Search error: ${resp.status} ${resp.statusText}`;
@@ -372,16 +386,17 @@ function buildSearchUrl(query) {
         summarizeResp.statusText
       );
 
-      const summarizeData = await summarizeResp
-        .json()
-        .catch(async (parseErr) => {
-          console.error("[Search Loader] Failed to parse summarizer JSON:", parseErr);
-          const text = await summarizeResp.text();
-          console.error("[Search Loader] Raw summarizer response:", text);
-          throw new Error(
-            `Summarizer returned invalid response (${summarizeResp.status})`
-          );
-        });
+      const summarizeData = await summarizeResp.json().catch(async (parseErr) => {
+        console.error(
+          "[Search Loader] Failed to parse summarizer JSON:",
+          parseErr
+        );
+        const text = await summarizeResp.text();
+        console.error("[Search Loader] Raw summarizer response:", text);
+        throw new Error(
+          `Summarizer returned invalid response (${summarizeResp.status})`
+        );
+      });
 
       if (!summarizeResp.ok || summarizeData.error) {
         const msg =
@@ -396,9 +411,7 @@ function buildSearchUrl(query) {
         summarizeData.summary ||
         "No summary generated.";
 
-      const cleanSummary = String(rawSummary)
-        .replace(/<[^>]+>/g, "")
-        .trim();
+      const cleanSummary = String(rawSummary).replace(/<[^>]+>/g, "").trim();
 
       if (!cleanSummary) {
         renderSummaryError(
