@@ -55,19 +55,28 @@ router.get('/aggregate', async (req, res) => {
     const isCategory = category && category.trim().length > 0 && !isSearch;
 
     console.log('[Aggregate] Request:', {
-      query,
-      country,
-      category,
+      query: query || '(none)',
+      country: country || '(none)',
+      category: category || '(none)',
       page: pageNum,
       isSearch,
       isCategory
     });
 
-    // Parse query parameters
+    // CRITICAL: If a search query is provided, it MUST be used - don't fall back to category
+    if (isSearch) {
+      console.log('[Aggregate] SEARCH MODE: Using search query, ignoring category if present');
+    } else if (isCategory) {
+      console.log('[Aggregate] CATEGORY MODE: Using category, no search query');
+    } else {
+      console.warn('[Aggregate] WARNING: No search query or category provided - may return empty results');
+    }
+
+    // Parse query parameters - prioritize search query over category
     const newsQuery = {
-      query: query || '',
+      query: isSearch ? query.trim() : '', // Only use query if it's a search
       country: country || undefined,
-      category: category || undefined
+      category: isSearch ? undefined : (category || undefined) // Don't use category if search is active
     };
 
     const warnings = [];
@@ -593,10 +602,17 @@ router.get('/aggregate', async (req, res) => {
     );
     res.json(responsePayload);
   } catch (error) {
-    console.error('[Aggregate] Error:', error);
+    console.error('[Aggregate] ========================================');
+    console.error('[Aggregate] ERROR in aggregate endpoint');
+    console.error('[Aggregate] Error message:', error.message);
+    console.error('[Aggregate] Error stack:', error.stack);
+    console.error('[Aggregate] ========================================');
+    
     res.status(500).json({
       error: error.message || 'Failed to aggregate news',
-      groups: []
+      groupedArticles: [],
+      rawArticles: [],
+      warnings: [`Error: ${error.message || 'Unknown error occurred'}`]
     });
   }
 });

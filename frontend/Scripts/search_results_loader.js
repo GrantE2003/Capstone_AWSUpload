@@ -288,7 +288,12 @@ const API_BASE = (function () {
 
   // Load search results
   function loadSearchResults() {
+    console.log('[Search Results Loader] ========================================');
+    console.log('[Search Results Loader] loadSearchResults() called');
+    
     const query = getSearchQuery();
+    console.log('[Search Results Loader] Extracted query from URL:', query);
+    console.log('[Search Results Loader] URL params:', window.location.search);
 
     // Update the title with the search phrase
     const titleEl = document.getElementById('searchTitle');
@@ -298,10 +303,14 @@ const API_BASE = (function () {
       titleEl.textContent = 'Your search summary: (no query provided)';
     }
 
-    if (!query) {
+    if (!query || query.trim().length === 0) {
+      console.warn('[Search Results Loader] No search query found - cannot load results');
       const main = document.querySelector('main');
       if (main) {
-        main.innerHTML = '<div class="card"><p>No search query provided.</p></div>';
+        const articlesContainer = main.querySelector('.articles-container') || main.querySelector('.Article\\ Links');
+        if (articlesContainer) {
+          articlesContainer.innerHTML = '<div class="card"><p style="padding: 20px; text-align: center;">No search query provided. Please enter a search term in the search bar above.</p></div>';
+        }
       }
       return;
     }
@@ -348,15 +357,23 @@ const API_BASE = (function () {
     `;
 
     const apiUrl = buildSearchUrl(query);
-    console.log('[Search Results Loader] Fetching search results from:', apiUrl);
+    console.log('[Search Results Loader] ========================================');
+    console.log('[Search Results Loader] SEARCH REQUEST');
     console.log('[Search Results Loader] Query:', query);
+    console.log('[Search Results Loader] API URL:', apiUrl);
+    console.log('[Search Results Loader] ========================================');
 
     fetch(apiUrl)
       .then(response => {
         console.log('[Search Results Loader] Response status:', response.status, response.statusText);
         console.log('[Search Results Loader] Response URL:', response.url);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - URL: ${response.url}`);
+          // Try to get error details from response
+          return response.json().then(errData => {
+            throw new Error(errData.error || `HTTP error! status: ${response.status} ${response.statusText}`);
+          }).catch(() => {
+            throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
+          });
         }
         return response.json();
       })

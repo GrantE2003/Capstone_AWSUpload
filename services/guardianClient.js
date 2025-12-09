@@ -26,8 +26,26 @@ async function fetchGuardianArticles({ query, country, category }) {
       'order-by': 'newest'
     };
 
-    // Add section if category provided
-    if (category) {
+    // Determine if this is a search query or category request
+    const hasSearchQuery = query && query.trim().length > 0;
+    const hasCategory = category && category.trim().length > 0;
+
+    // If search query is provided, use it (search mode)
+    if (hasSearchQuery) {
+      // Build query with country filter if provided
+      let searchQuery = query.trim();
+      if (country) {
+        const countryName = getCountryName(country);
+        if (countryName) {
+          const countryTerms = [countryName, country.toUpperCase()].map(term => `"${term}"`).join(' OR ');
+          searchQuery = `(${searchQuery}) AND (${countryTerms})`;
+        }
+      }
+      params.q = searchQuery;
+      console.log('[Guardian] SEARCH MODE: Using search query:', searchQuery);
+    } 
+    // If category is provided but no search query, use category (category mode)
+    else if (hasCategory) {
       const categoryMap = {
         'sports': 'sport',
         'business': 'business',
@@ -40,21 +58,21 @@ async function fetchGuardianArticles({ query, country, category }) {
         'us': 'us-news'
       };
       params.section = categoryMap[category] || category;
-    }
-
-    // Build query with country filter if provided
-    let searchQuery = query || '';
-    if (country) {
-      const countryName = getCountryName(country);
-      if (countryName) {
-        const countryTerms = [countryName, country.toUpperCase()].map(term => `"${term}"`).join(' OR ');
-        searchQuery = searchQuery 
-          ? `(${searchQuery}) AND (${countryTerms})`
-          : countryTerms;
+      console.log('[Guardian] CATEGORY MODE: Using category:', params.section);
+      
+      // Add country filter to category search if provided
+      if (country) {
+        const countryName = getCountryName(country);
+        if (countryName) {
+          const countryTerms = [countryName, country.toUpperCase()].map(term => `"${term}"`).join(' OR ');
+          params.q = countryTerms;
+        }
       }
     }
-    if (searchQuery) {
-      params.q = searchQuery;
+    // If neither query nor category, return empty (shouldn't happen in normal flow)
+    else {
+      console.warn('[Guardian] No search query or category provided - returning empty results');
+      return [];
     }
 
     console.log('[Guardian] Fetching articles with query:', searchQuery || 'none');

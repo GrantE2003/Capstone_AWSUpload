@@ -15,8 +15,27 @@ const GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc';
  */
 async function fetchGdeltArticles({ query, country, category }) {
   try {
-    // GDELT requires a query - if empty, use a broad search term
-    const gdeltQuery = query && query.trim() ? query.trim() : '*';
+    // Determine if this is a search query or category request
+    const hasSearchQuery = query && query.trim().length > 0;
+    const hasCategory = category && category.trim().length > 0;
+    
+    let gdeltQuery = '';
+    
+    // If search query is provided, use it (search mode)
+    if (hasSearchQuery) {
+      gdeltQuery = query.trim();
+      console.log('[GDELT] SEARCH MODE: Using search query:', gdeltQuery);
+    }
+    // If category is provided but no search query, use category (category mode)
+    else if (hasCategory) {
+      gdeltQuery = category;
+      console.log('[GDELT] CATEGORY MODE: Using category:', category);
+    }
+    // If neither, return empty (shouldn't happen in normal flow)
+    else {
+      console.warn('[GDELT] No search query or category provided - returning empty results');
+      return [];
+    }
     
     const params = {
       query: gdeltQuery,
@@ -26,19 +45,10 @@ async function fetchGdeltArticles({ query, country, category }) {
       sort: 'date'
     };
 
-    // Add country filter if provided
+    // Add country filter if provided (append to query)
     if (country) {
       const countryCode = country.toUpperCase();
-      params.query = params.query === '*' 
-        ? `sourcecountry:${countryCode}`
-        : `${params.query} sourcecountry:${countryCode}`;
-    }
-
-    // Category filtering
-    if (category && category !== '*') {
-      params.query = params.query === '*' 
-        ? category
-        : `${params.query} ${category}`;
+      params.query = `${params.query} sourcecountry:${countryCode}`;
     }
 
     console.log('[GDELT] Fetching articles with query:', params.query);

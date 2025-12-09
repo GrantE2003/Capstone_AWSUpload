@@ -26,18 +26,48 @@ async function fetchCurrentsArticles({ query, country, category }) {
       pageSize: 50
     };
 
-    // Add keywords/search query
-    if (query && query.trim()) {
-      params.keywords = query;
+    // Determine if this is a search query or category request
+    const hasSearchQuery = query && query.trim().length > 0;
+    const hasCategory = category && category.trim().length > 0;
+
+    let endpoint = '';
+    
+    // If search query is provided, use search endpoint (search mode)
+    if (hasSearchQuery) {
+      params.keywords = query.trim();
+      endpoint = `${CURRENTS_BASE_URL}/search`;
+      console.log('[Currents] SEARCH MODE: Using search query:', query.trim());
+    }
+    // If category is provided but no search query, use latest-news with category (category mode)
+    else if (hasCategory) {
+      const categoryMap = {
+        'sports': 'sports',
+        'business': 'business',
+        'technology': 'technology',
+        'politics': 'politics',
+        'health': 'health',
+        'science': 'science',
+        'entertainment': 'entertainment',
+        'general': 'general'
+      };
+      const currentsCategory = categoryMap[category] || category;
+      params.category = currentsCategory;
+      endpoint = `${CURRENTS_BASE_URL}/latest-news`;
+      console.log('[Currents] CATEGORY MODE: Using category:', currentsCategory);
+    }
+    // If neither, return empty (shouldn't happen in normal flow)
+    else {
+      console.warn('[Currents] No search query or category provided - returning empty results');
+      return [];
     }
 
-    // Add country filter (Currents uses country code)
+    // Add country filter (Currents uses country code) - works with both search and category
     if (country) {
       params.country = country.toLowerCase();
     }
 
-    // Add category filter
-    if (category) {
+    // Add category filter to search if both are provided (optional enhancement)
+    if (hasSearchQuery && hasCategory) {
       const categoryMap = {
         'sports': 'sports',
         'business': 'business',
@@ -51,11 +81,6 @@ async function fetchCurrentsArticles({ query, country, category }) {
       const currentsCategory = categoryMap[category] || category;
       params.category = currentsCategory;
     }
-
-    console.log('[Currents] Fetching articles with query:', query || 'none');
-
-    // Currents API endpoint: /latest-news or /search
-    const endpoint = query ? `${CURRENTS_BASE_URL}/search` : `${CURRENTS_BASE_URL}/latest-news`;
     
     const response = await axios.get(endpoint, { 
       params,
