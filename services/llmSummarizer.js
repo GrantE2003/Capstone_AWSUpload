@@ -128,8 +128,8 @@ The summary should provide complete understanding of the story without any sourc
       cleanedSummary = cleanedSummary
         // Remove source references like [GUARDIAN], [GDELT], [CURRENTS], etc.
         .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
-        // Remove patterns like "According to [SOURCE]" or "From [SOURCE]"
-        .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
+        // Remove patterns like "According to [SOURCE]" or "From [SOURCE]" - only if brackets are present
+        .replace(/(?:according to|from|via|source:)\s*\[[^\]]+\]/gi, '')
         // Remove standalone source names in brackets
         .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
         // Remove title references if they appear
@@ -137,6 +137,12 @@ The summary should provide complete understanding of the story without any sourc
         // Clean up extra whitespace
         .replace(/\s+/g, ' ')
         .trim();
+      
+      // Safety check: if cleaning removed too much content, use fallback
+      if (cleanedSummary.length < 20 || cleanedSummary === '.' || cleanedSummary.match(/^\.\s*$/)) {
+        console.warn('[LLM] Cleaning removed too much content, using basic summary fallback');
+        cleanedSummary = generateBasicSummary(group).summary;
+      }
     }
 
     const summary = cleanedSummary;
