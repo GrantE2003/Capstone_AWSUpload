@@ -34,7 +34,7 @@ Published: ${article.publishedAt || 'Unknown date'}
     }).join('\n\n');
 
     const prompt = `You are analyzing multiple news articles about the same real-world story from different sources.
-Your task is to create ONE neutral combined summary.
+Your task is to create ONE comprehensive, informative combined summary that synthesizes information from all sources.
 
 Here are the articles:
 
@@ -44,7 +44,7 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "A neutral combined summary (2-4 sentences, about 80-150 words) that uses information from ALL of the articles. Do not mention sources or compare them. Just describe what happened, who was involved, when/where, and key details."
+  "summary": "A comprehensive, informative combined summary (4-7 sentences, about 150-250 words) that synthesizes information from ALL of the articles. Include key details: who, what, when, where, why, and how. Include specific names, dates, locations, numbers, quotes, and important context. Do not mention sources or compare them. Write in clear, engaging prose that provides substantial information and helps readers understand the full story."
 }`;
 
     let apiResponse;
@@ -60,8 +60,8 @@ Return ONLY valid JSON with this exact shape:
             },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 500,
-          temperature: 0.3,
+          max_tokens: 800,
+          temperature: 0.4,
           response_format: { type: 'json_object' } // new-style JSON mode
         },
         {

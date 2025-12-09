@@ -740,15 +740,15 @@ app.post('/api/summarize', async (req, res) => {
           {
             role: 'system',
             content:
-              'You are a news fact extractor. Read the entire article and extract the specific facts, events, and details. Do NOT summarize or paraphrase. Extract the actual information from the article. Include specific names, dates, locations, numbers, quotes, and events mentioned in the article.'
+              'You are an expert news summarizer. Create comprehensive, informative summaries that capture the key information, context, and important details from news articles. Include specific names, dates, locations, numbers, quotes, and events. Write in clear, engaging prose that helps readers understand the full story.'
           },
           {
             role: 'user',
-            content: `Read this news article and extract the specific facts and details. Include names, dates, locations, numbers, quotes, and events mentioned in the article. Do not summarize - extract the actual information:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
+            content: `Create a comprehensive and informative summary of this news article. Include all important details: who, what, when, where, why, and how. Include specific names, dates, locations, numbers, quotes, and key events. Write 3-5 sentences that provide substantial information and context. Make it informative and detailed:\n\nTitle: "${title}"\n\nArticle Content:\n${text}`
           }
         ],
-        max_tokens: 400,
-        temperature: 0.7
+        max_tokens: 600,
+        temperature: 0.5
       },
       {
         headers: headers,
