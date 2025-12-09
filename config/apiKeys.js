@@ -31,6 +31,13 @@ if (!CURRENTS_API_KEY) {
   console.warn('   Get your key at: https://currentsapi.services/ (free tier available)');
 }
 
+// Mediastack API - Required for Mediastack articles
+const MEDIASTACK_API_KEY = process.env.MEDIASTACK_API_KEY;
+if (!MEDIASTACK_API_KEY) {
+  console.warn('[CONFIG] MEDIASTACK_API_KEY not set - Mediastack articles will not be available');
+  console.warn('   Get your key at: https://mediastack.com/ (free tier available)');
+}
+
 // OpenRouter API - Required for summaries
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const LLM_API_URL = process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
@@ -46,12 +53,14 @@ console.log('\n[CONFIG] API Configuration Status:');
 console.log(`   Guardian: ${GUARDIAN_API_KEY ? 'Configured' : 'Missing'}`);
 console.log(`   GDELT: ${GDELT_API_KEY ? 'Configured (optional)' : 'Using free tier'}`);
 console.log(`   Currents: ${CURRENTS_API_KEY ? 'Configured' : 'Missing'}`);
+console.log(`   Mediastack: ${MEDIASTACK_API_KEY ? 'Configured' : 'Missing'}`);
 console.log(`   OpenRouter: ${OPENROUTER_API_KEY ? 'Configured' : 'Missing (will use fallback)'}\n`);
 
 module.exports = {
   GUARDIAN_API_KEY,
   GDELT_API_KEY,
   CURRENTS_API_KEY,
+  MEDIASTACK_API_KEY,
   OPENROUTER_API_KEY,
   LLM_API_URL,
   LLM_MODEL

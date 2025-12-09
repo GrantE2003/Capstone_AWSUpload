@@ -148,7 +148,7 @@ async function fetchGdeltArticles({ query, country, category }) {
         
         // For GDELT, we're more strict - filter out articles without good descriptions
         return hasUrl && hasTitle && hasValidDescription;
-      })
+      });
 
     console.log(`GDELT returned ${normalizedArticles.length} results`);
     
