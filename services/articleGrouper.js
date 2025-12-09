@@ -149,20 +149,26 @@ function calculateSimilarity(article1, article2) {
     const titleSimilarity = jaccardSimilarity(titleTerms1, titleTerms2);
 
     // CRITICAL: Title similarity is the PRIMARY signal for grouping
-    if (titleSimilarity > 0.2) {
-      // Weight title similarity very heavily (95%) since it's the strongest signal
+    // Make title matching much more aggressive - if titles share significant words, group them
+    if (titleSimilarity > 0.15) { // Lowered threshold from 0.2
+      // Weight title similarity very heavily (98%) since it's the strongest signal
       textSimilarity = Math.max(
         textSimilarity,
-        titleSimilarity * 0.95 + textSimilarity * 0.05
+        titleSimilarity * 0.98 + textSimilarity * 0.02
       );
     }
 
-    // Additional boost: check for shared important words in titles
-    const title1Words = new Set(title1.split(/\s+/).filter((w) => w.length > 3));
-    const title2Words = new Set(title2.split(/\s+/).filter((w) => w.length > 3));
+    // Additional boost: check for shared important words in titles (more aggressive)
+    const title1Words = new Set(title1.split(/\s+/).filter((w) => w.length > 2)); // Lowered from 3 to 2
+    const title2Words = new Set(title2.split(/\s+/).filter((w) => w.length > 2));
     const sharedTitleWords = [...title1Words].filter((w) => title2Words.has(w));
-    if (sharedTitleWords.length >= 3) {
-      textSimilarity = Math.min(1, textSimilarity + 0.1);
+    if (sharedTitleWords.length >= 2) { // Lowered from 3 to 2
+      textSimilarity = Math.min(1, textSimilarity + 0.2); // Increased boost from 0.1 to 0.2
+    }
+    
+    // EXTRA: If titles share 4+ words, they're definitely about the same story
+    if (sharedTitleWords.length >= 4) {
+      textSimilarity = Math.min(1, textSimilarity + 0.3); // Strong boost for high overlap
     }
   }
 
@@ -264,7 +270,8 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
       }
 
       // Apply cross-source boost BEFORE threshold check to improve grouping
-      const effectiveSimilarity = hasDifferentSource ? maxSimilarity * 1.3 : maxSimilarity; // 30% boost for cross-source
+      // Make cross-source grouping even more aggressive
+      const effectiveSimilarity = hasDifferentSource ? maxSimilarity * 1.5 : maxSimilarity; // Increased to 50% boost for cross-source
       
       if (effectiveSimilarity >= similarityThreshold) {
         // STRONGLY prefer groups with different sources (cross-source grouping)
@@ -297,10 +304,11 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
   );
 
   // Phase 2: merge groups that clearly refer to the same story
+  // Focus on title similarity - if titles are similar, merge the groups
   const mergedGroups = [];
   const merged = new Set();
   let mergeCount = 0;
-  const mergeThreshold = similarityThreshold * 0.95;
+  const mergeThreshold = similarityThreshold * 0.85; // Lowered from 0.95 to merge more aggressively
 
   for (let i = 0; i < groups.length; i++) {
     if (merged.has(i)) continue;
@@ -331,12 +339,32 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
 
       if (!hasDifferentSources) continue;
 
+      // Check title similarity first - if titles are similar, merge
       let maxSimilarity = 0;
+      let maxTitleSimilarity = 0;
+      
       for (const a1 of currentGroup.articles) {
         for (const a2 of otherGroup.articles) {
           const similarity = calculateSimilarity(a1, a2);
           if (similarity > maxSimilarity) maxSimilarity = similarity;
+          
+          // Extra check: if titles share significant words, boost similarity
+          if (a1.title && a2.title) {
+            const title1 = normalizeText(a1.title);
+            const title2 = normalizeText(a2.title);
+            const title1Words = new Set(title1.split(/\s+/).filter((w) => w.length > 2));
+            const title2Words = new Set(title2.split(/\s+/).filter((w) => w.length > 2));
+            const sharedWords = [...title1Words].filter((w) => title2Words.has(w));
+            if (sharedWords.length >= 3) {
+              maxTitleSimilarity = Math.max(maxTitleSimilarity, 0.3); // Boost for title similarity
+            }
+          }
         }
+      }
+      
+      // Boost similarity if titles are similar
+      if (maxTitleSimilarity > 0) {
+        maxSimilarity = Math.max(maxSimilarity, maxSimilarity + maxTitleSimilarity);
       }
 
       if (maxSimilarity >= mergeThreshold) {
