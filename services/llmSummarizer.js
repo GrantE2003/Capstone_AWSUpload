@@ -44,7 +44,7 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (18-25 sentences, about 500-700 words, MINIMUM 400 characters) that synthesizes information from ALL of the articles. The summary must be maximally informative, broad in scope, and include EVERYTHING relevant. Think broadly about the story - include not just the main event but all surrounding context, implications, and related information:
+  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (25-35 sentences, about 700-1000 words, MINIMUM 600 characters) that synthesizes information from ALL of the articles. The summary must be maximally informative, broad in scope, and include EVERYTHING relevant. Think broadly about the story - include not just the main event but all surrounding context, implications, and related information:
 
 - WHO: All key people, organizations, and entities with their specific roles, titles, and relationships. Include full names, positions, affiliations, and their connections to each other. Mention all stakeholders, participants, and affected parties.
 - WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions, outcomes, and sub-events. Cover all aspects of the story, not just the headline.
@@ -73,12 +73,12 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 10. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
 11. Synthesize information from ALL sources to provide the most complete picture possible
 12. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
-13. The summary MUST be at least 400 characters long - be thorough, broad, and detailed enough to meet this requirement
+13. The summary MUST be at least 600 characters long (preferably 700-1000 words) - be thorough, broad, and detailed enough to meet this requirement
 14. Think BROADLY about the story - include all related information, context, implications, and background. Don't just focus on the main event, but provide a comprehensive overview that helps readers fully understand the story and its significance
 15. Include multiple perspectives, viewpoints, and angles from the different sources
 16. Connect the story to broader themes, trends, or related events when relevant
 
-The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, broad in scope, and information-rich. NEVER repeat the title. MINIMUM LENGTH: 400 characters. Think comprehensively and include all relevant information that helps readers understand the full story."
+The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, broad in scope, and information-rich. NEVER repeat the title. MINIMUM LENGTH: 600 characters (preferably 700-1000 words). Think comprehensively and include all relevant information that helps readers understand the full story."
 }`;
 
     let apiResponse;
@@ -94,7 +94,7 @@ The summary should provide complete, comprehensive understanding of the story wi
             },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 2500,
+          max_tokens: 4000,
           temperature: 0.3,
           response_format: { type: 'json_object' } // new-style JSON mode
         },
@@ -155,8 +155,8 @@ The summary should provide complete, comprehensive understanding of the story wi
         cleanedSummary = generateBasicSummary(group).summary;
       }
       
-      // ENFORCE MINIMUM LENGTH: Summaries must be at least 400 characters
-      const MIN_SUMMARY_LENGTH = 400;
+      // ENFORCE MINIMUM LENGTH: Summaries must be at least 600 characters
+      const MIN_SUMMARY_LENGTH = 600;
       if (cleanedSummary.length < MIN_SUMMARY_LENGTH) {
         console.warn(`[LLM] Summary too short (${cleanedSummary.length} chars), expanding...`);
         // Try to expand the summary by adding more detail from articles
@@ -248,7 +248,7 @@ function expandShortSummary(shortSummary, group) {
         }
       }
     }
-    if (expanded.join(' ').length >= 250) break;
+    if (expanded.join(' ').length >= 400) break;
   }
   
   return expanded.join(' ').replace(/\s+/g, ' ').trim();
@@ -295,7 +295,7 @@ function generateEnhancedBasicSummary(group) {
   }
   
   // Ensure minimum length - add more content if needed
-  const MIN_LENGTH = 400;
+  const MIN_LENGTH = 600;
   if (summary.length < MIN_LENGTH) {
     // Try to get more content from articles
     for (const article of articles) {
