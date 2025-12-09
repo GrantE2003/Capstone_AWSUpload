@@ -264,13 +264,17 @@ function groupSimilarArticles(articles, similarityThreshold = 0.3) {
       }
 
       if (maxSimilarity >= similarityThreshold) {
+        // STRONGLY prefer groups with different sources (cross-source grouping)
         if (hasDifferentSource) {
-          if (maxSimilarity > bestSimilarity || !bestGroupHasDifferentSource) {
+          // Boost similarity score for cross-source matches to prioritize them
+          const boostedSimilarity = maxSimilarity * 1.2; // 20% boost for cross-source
+          if (boostedSimilarity > bestSimilarity || !bestGroupHasDifferentSource) {
             bestGroup = group;
-            bestSimilarity = maxSimilarity;
+            bestSimilarity = boostedSimilarity;
             bestGroupHasDifferentSource = true;
           }
         } else if (!bestGroupHasDifferentSource && maxSimilarity > bestSimilarity) {
+          // Only consider same-source groups if no cross-source match found
           bestGroup = group;
           bestSimilarity = maxSimilarity;
         }

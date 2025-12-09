@@ -158,12 +158,31 @@ router.get('/aggregate', async (req, res) => {
       );
     }
 
+    // Balance articles from each source to prevent one source from dominating
+    // Take up to 30 articles from each source to ensure diversity
+    const MAX_ARTICLES_PER_SOURCE = 30;
+    const balancedGuardian = Array.isArray(guardianArticles) 
+      ? guardianArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      : [];
+    const balancedGdelt = Array.isArray(gdeltArticles) 
+      ? gdeltArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      : [];
+    const balancedCurrents = Array.isArray(currentsArticles) 
+      ? currentsArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
+      : [];
+
+    console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}`);
+
     // Combine all normalized articles into ONE pool before grouping
-    const allArticles = [
-      ...(Array.isArray(guardianArticles) ? guardianArticles : []),
-      ...(Array.isArray(gdeltArticles) ? gdeltArticles : []),
-      ...(Array.isArray(currentsArticles) ? currentsArticles : [])
-    ];
+    // Interleave articles from different sources to improve cross-source grouping
+    const allArticles = [];
+    const maxLength = Math.max(balancedGuardian.length, balancedGdelt.length, balancedCurrents.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+      if (i < balancedGuardian.length) allArticles.push(balancedGuardian[i]);
+      if (i < balancedGdelt.length) allArticles.push(balancedGdelt[i]);
+      if (i < balancedCurrents.length) allArticles.push(balancedCurrents[i]);
+    }
 
     // Add source field to each article for grouping logic
     const articlesWithSource = allArticles.map(article => ({
@@ -218,7 +237,8 @@ router.get('/aggregate', async (req, res) => {
     }
 
     // Group similar articles ACROSS ALL SOURCES
-    const similarityThreshold = 0.45;
+    // Lower threshold to improve cross-source grouping
+    const similarityThreshold = 0.35;
     const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
 
     console.log(
