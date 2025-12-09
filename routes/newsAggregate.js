@@ -138,6 +138,15 @@ router.get('/aggregate', async (req, res) => {
 
     const totalArticles = guardianCount + gdeltCount + currentsCount;
     console.log(`   Total: ${totalArticles} articles from all sources\n`);
+    
+    // Warn if one source is dominating
+    const maxCount = Math.max(guardianCount, gdeltCount, currentsCount);
+    if (maxCount > 0) {
+      const maxPercentage = (maxCount / totalArticles) * 100;
+      if (maxPercentage > 70) {
+        console.warn(`[Aggregate] WARNING: One source is dominating (${maxPercentage.toFixed(1)}% of articles). Source balancing will help.`);
+      }
+    }
 
     // Warn if any source returned zero articles
     if (guardianCount === 0) {
@@ -231,7 +240,8 @@ router.get('/aggregate', async (req, res) => {
         query: query || '',
         country: country || undefined,
         category: category || undefined,
-        groups: [],
+        groupedArticles: [],
+        rawArticles: [],
         warnings: warnings.length > 0 ? warnings : ['No articles found from any source.']
       });
     }
@@ -336,7 +346,7 @@ router.get('/aggregate', async (req, res) => {
       return Math.max(0, 500 - (hoursAgo - 48) * 10);
     };
 
-    // Sort groups with priority: multi-source first, then recency
+    // Sort groups with priority: multi-source first (3 sources > 2 sources > 1 source), then recency
     filteredGroups.sort((a, b) => {
       const aSourceCount = getUniqueSourceCount(a);
       const bSourceCount = getUniqueSourceCount(b);
@@ -344,6 +354,12 @@ router.get('/aggregate', async (req, res) => {
       const aIsMultiSource = aSourceCount >= 2;
       const bIsMultiSource = bSourceCount >= 2;
 
+      // Prioritize groups with more sources (3 > 2 > 1)
+      if (aSourceCount !== bSourceCount) {
+        return bSourceCount - aSourceCount;
+      }
+
+      // If same source count, prioritize multi-source over single-source
       if (aIsMultiSource && !bIsMultiSource) return -1;
       if (!aIsMultiSource && bIsMultiSource) return 1;
 

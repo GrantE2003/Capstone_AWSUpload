@@ -329,11 +329,27 @@ const API_BASE = (function () {
       }
     }
 
-    articlesContainer.innerHTML =
-      '<div class="card"><p>Loading search results...</p></div>';
+    // Show visible loading indicator with spinner
+    articlesContainer.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="font-size: 24px; margin-bottom: 20px;">🔍</div>
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Loading search results...</p>
+        <p style="color: #666; font-size: 14px;">Searching across all news sources...</p>
+        <div style="margin-top: 20px;">
+          <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      </div>
+    `;
 
     const apiUrl = buildSearchUrl(query);
     console.log('[Search Results Loader] Fetching search results from:', apiUrl);
+    console.log('[Search Results Loader] Query:', query);
 
     fetch(apiUrl)
       .then(response => {
@@ -349,7 +365,8 @@ const API_BASE = (function () {
           groupedArticles: data.groupedArticles?.length || 0,
           rawArticles: data.rawArticles?.length || 0,
           articles: data.articles?.length || 0,
-          fallbackMode: data.fallbackMode || false
+          fallbackMode: data.fallbackMode || false,
+          warnings: data.warnings?.length || 0
         });
 
         articlesContainer.innerHTML = '';
@@ -368,9 +385,16 @@ const API_BASE = (function () {
             `;
             articlesContainer.appendChild(paginationDiv);
           }
+        } else if (data.rawArticles && data.rawArticles.length > 0) {
+          // Fallback: show raw articles if no groups were created
+          console.log('[Search Results] No groups found, displaying', data.rawArticles.length, 'raw articles');
+          articlesContainer.innerHTML = '<div class="card"><p style="font-weight: bold; margin-bottom: 15px;">Found ' + data.rawArticles.length + ' articles:</p></div>';
+          data.rawArticles.slice(0, 20).forEach(article => {
+            renderRawArticle(article, articlesContainer);
+          });
         } else {
           articlesContainer.innerHTML =
-            '<div class="card"><p>No grouped stories found for your search. Try a different keyword.</p></div>';
+            '<div class="card"><p style="font-size: 16px; padding: 20px;">No articles found for your search: "<strong>' + query + '</strong>"</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
         }
 
         if (data.warnings && data.warnings.length > 0) {
@@ -397,14 +421,16 @@ const API_BASE = (function () {
           origin: window.location.origin
         });
 
-        let errorMessage = 'Error loading search results. Please try again.';
+        let errorMessage = '<div style="text-align: center; padding: 40px;">';
+        errorMessage += '<div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>';
+        errorMessage += '<p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Error loading search results</p>';
+        errorMessage += '<p style="color: #666; margin-bottom: 20px;">Please try again or check your connection.</p>';
         if (error.message) {
-          errorMessage += `<br><small>Error: ${error.message}</small>`;
+          errorMessage += `<p style="color: #999; font-size: 12px;">Error: ${error.message}</p>`;
         }
-        errorMessage += `<br><small>URL: ${apiUrl}</small>`;
-        errorMessage += `<br><small>Origin: ${window.location.origin}</small>`;
+        errorMessage += '</div>';
 
-        articlesContainer.innerHTML = `<div class="card"><p>${errorMessage}</p></div>`;
+        articlesContainer.innerHTML = `<div class="card">${errorMessage}</div>`;
       });
   }
 
