@@ -34,7 +34,7 @@ Published: ${article.publishedAt || 'Unknown date'}
     }).join('\n\n');
 
     const prompt = `You are analyzing multiple news articles about the same real-world story from different sources.
-Your task is to create ONE highly detailed, comprehensive combined summary that synthesizes information from all sources and provides maximum value to readers.
+Your task is to create ONE extremely detailed, comprehensive, information-dense combined summary that synthesizes information from all sources and provides maximum value to readers. This summary should be so thorough that readers feel fully informed without needing to read the original articles.
 
 Here are the articles:
 
@@ -44,30 +44,34 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "A highly detailed, comprehensive combined summary (8-12 sentences, about 250-400 words) that synthesizes information from ALL of the articles. The summary must be extremely informative and include:
+  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (12-18 sentences, about 350-500 words) that synthesizes information from ALL of the articles. The summary must be maximally informative and include EVERYTHING relevant:
 
-- WHO: All key people, organizations, and entities with their specific roles
-- WHAT: The main event, action, or development with specific details
-- WHEN: Exact dates, times, and timeline of events
-- WHERE: Specific locations, regions, or places mentioned
-- WHY: The reasons, causes, motivations, and context behind the story
-- HOW: The process, methods, or mechanisms involved
-- IMPACT: Consequences, implications, or significance
-- QUOTES: Important quotes from key sources if available
-- NUMBERS: Specific statistics, figures, amounts, or data points
-- BACKGROUND: Relevant context that helps understand the story
+- WHO: All key people, organizations, and entities with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
+- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
+- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, and temporal context.
+- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details.
+- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, and driving forces.
+- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, and implementation details.
+- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, and broader significance.
+- QUOTES: Important quotes from key sources if available, with attribution context.
+- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned.
+- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, and necessary background information.
+- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles.
+- ANALYSIS: Key insights, patterns, or important observations that emerge from synthesizing multiple sources.
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
-1. The summary must contain ONLY the synthesized description of the news story
+1. The summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
 2. Do NOT include article titles anywhere in the summary
 3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
 4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
 5. Do NOT include phrases like "According to [source]" or "From [source]"
 6. Do NOT include any metadata, formatting markers, or attribution
-7. Write in clear, engaging prose that makes readers feel fully informed
+7. Write in clear, engaging, information-dense prose that makes readers feel fully informed
 8. Start the summary directly with the story content - do not preface with title or source
+9. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
+10. Synthesize information from ALL sources to provide the most complete picture possible
 
-The summary should provide complete understanding of the story without any source attribution or title references."
+The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich."
 }`;
 
     let apiResponse;
@@ -79,11 +83,11 @@ The summary should provide complete understanding of the story without any sourc
           messages: [
             {
               role: 'system',
-              content: 'You are a news analysis assistant. Always respond with valid JSON only.'
+              content: 'You are an expert news analyst and summarizer. Create extremely detailed, comprehensive, information-dense summaries that provide maximum value to readers. Your summaries should be thorough, covering all critical aspects: key players and their roles, specific facts and figures, timeline of events, background context, implications, quotes from important sources, locations, dates, and why this story matters. Write in clear, engaging, information-rich prose that makes readers feel fully informed without needing to read the full article. Always respond with valid JSON only.'
             },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 1200,
+          max_tokens: 1800,
           temperature: 0.3,
           response_format: { type: 'json_object' } // new-style JSON mode
         },

@@ -285,7 +285,19 @@
         return;
       }
 
-      // First Time Click; Fetch Summary from Backend
+      // Check if summary already exists in group data (from aggregate endpoint)
+      const existingSummary = group.aiSummary || group.summary;
+      if (existingSummary && existingSummary.trim().length > 20) {
+        // Use pre-generated summary from aggregate endpoint
+        const cleanSummary = String(existingSummary).replace(/<[^>]+>/g, "").trim();
+        summaryText.textContent = cleanSummary;
+        summaryDiv.style.display = "block";
+        summaryDiv.dataset.loaded = "true";
+        summaryButton.textContent = "Hide Summary";
+        return;
+      }
+
+      // First Time Click; Fetch Summary from Backend (fallback if no pre-generated summary)
       summaryDiv.style.display = "block";
       summaryText.textContent = "Loading summary...";
       summaryButton.disabled = true;

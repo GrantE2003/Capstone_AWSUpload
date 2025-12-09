@@ -762,35 +762,39 @@ app.get('/api/guardian', async (req, res) => {
             },
             {
               role: 'user',
-              content: `You are summarizing news articles. Create a highly detailed, comprehensive summary that provides maximum information value. Your summary should be 6-10 sentences and include:
+              content: `You are summarizing news articles. Create an EXTREMELY detailed, comprehensive, information-dense summary that provides maximum information value. Your summary should be 12-18 sentences (about 350-500 words) and include EVERYTHING relevant:
 
-- WHO: All key people, organizations, and entities involved with their specific roles
-- WHAT: The main event, action, or development with specific details
-- WHEN: Exact dates, times, and timeline of events
-- WHERE: Specific locations, regions, or places mentioned
-- WHY: The reasons, causes, motivations, and context behind the story
-- HOW: The process, methods, or mechanisms involved
-- IMPACT: Consequences, implications, or significance of the news
-- QUOTES: Important quotes from key sources if available
-- NUMBERS: Specific statistics, figures, amounts, or data points
-- BACKGROUND: Relevant context that helps understand the story
+- WHO: All key people, organizations, and entities involved with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
+- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
+- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, and temporal context.
+- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details.
+- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, and driving forces.
+- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, and implementation details.
+- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, and broader significance.
+- QUOTES: Important quotes from key sources if available, with attribution context.
+- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned.
+- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, and necessary background information.
+- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles.
+- ANALYSIS: Key insights, patterns, or important observations that emerge from the content.
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
-1. Your summary must contain ONLY the synthesized description of the news story
+1. Your summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
 2. Do NOT include the article title anywhere in your summary
 3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
 4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
 5. Do NOT include phrases like "According to [source]" or "From [source]"
 6. Do NOT include any metadata, formatting markers, or attribution
-7. Write in engaging, clear prose that stands alone without any source attribution or title references
+7. Write in engaging, clear, information-dense prose that stands alone without any source attribution or title references
+8. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
+9. Be thorough, detailed, and information-rich - readers should feel fully informed
 
 Start your summary directly with the story content. Do not preface it with the title or source.
 
 Article Content:\n${text}`
             }
           ],
-          max_tokens: 1000,
-          temperature: 0.4
+          max_tokens: 1500,
+          temperature: 0.3
         }, {
           headers: headers,
           timeout: 30000
