@@ -349,7 +349,9 @@ router.get('/aggregate', async (req, res) => {
     // Group similar articles ACROSS ALL SOURCES
     // Use lower threshold for search queries to group articles with similar titles more aggressively
     // For search, we want to group articles about the same topic even if they have slightly different wording
-    const similarityThreshold = isSearch ? 0.15 : 0.25; // More aggressive grouping for search queries
+    // But don't make it too aggressive - we still want some groups to be created
+    const similarityThreshold = isSearch ? 0.20 : 0.25; // Slightly more aggressive grouping for search queries
+    console.log('[Aggregate] Grouping', articlesWithSource.length, 'articles with similarity threshold:', similarityThreshold);
     const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
     
     // CRITICAL: Ensure grouping actually happened
@@ -611,6 +613,8 @@ router.get('/aggregate', async (req, res) => {
     } else {
       groupsToSummarize = [];
       console.warn('[Aggregate] WARNING: No groups created at all!');
+      console.warn('[Aggregate] This might indicate an issue with article grouping or all articles were filtered out');
+      console.warn('[Aggregate] Raw articles available:', articlesWithSource.length);
     }
     
     // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
@@ -841,6 +845,24 @@ router.get('/aggregate', async (req, res) => {
     if (summarizedGroups.length === 0 && articlesWithSource.length > 0) {
       console.warn('[Aggregate] WARNING: No groups were successfully summarized, but we have', articlesWithSource.length, 'raw articles');
       console.warn('[Aggregate] This might indicate an issue with the summarization process');
+      console.warn('[Aggregate] Frontend will display raw articles as fallback');
+      
+      // For search queries, if we have articles but no groups, create minimal groups from individual articles
+      // This ensures search results are always shown
+      if (isSearch && summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+        console.log('[Aggregate] SEARCH MODE: Creating individual article groups as fallback');
+        const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2).map((article, index) => ({
+          groupId: `fallback-${index}`,
+          groupTitle: article.title || 'Untitled article',
+          summary: article.description || 'No summary available.',
+          aiSummary: article.description || 'No summary available.',
+          articles: [article],
+          sourceCount: 1,
+          sources: [article.sourceName || article.source || 'Unknown']
+        }));
+        summarizedGroups.push(...fallbackGroups);
+        console.log('[Aggregate] Created', fallbackGroups.length, 'fallback groups from individual articles');
+      }
     }
 
     // Apply universal pagination - ALL views paginate at 18 groups per page
