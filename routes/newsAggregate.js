@@ -849,7 +849,7 @@ router.get('/aggregate', async (req, res) => {
       
       // For search queries, if we have articles but no groups, create minimal groups from individual articles
       // This ensures search results are always shown
-      if (isSearch && summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+      if (isSearch) {
         console.log('[Aggregate] SEARCH MODE: Creating individual article groups as fallback');
         const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2).map((article, index) => ({
           groupId: `fallback-${index}`,
