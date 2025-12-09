@@ -11,7 +11,7 @@
       return "http://localhost:4000";
     }
 
-    const renderUrl = "https://capstone-awsupload.onrender.com";
+    const renderUrl = "https://capstone-awsupload-1.onrender.com";
     console.log("[Search Loader] Using Render backend:", renderUrl);
     return renderUrl;
   })();
