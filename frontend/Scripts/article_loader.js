@@ -520,14 +520,7 @@
             renderStoryGroup(group, articlesContainer)
           );
 
-          if (data.pagination && data.pagination.totalPages > 1) {
-            const paginationDiv = document.createElement("div");
-            paginationDiv.className = "pagination";
-            paginationDiv.innerHTML = `
-              <p>Page ${data.pagination.currentPage} of ${data.pagination.totalPages}</p>
-            `;
-            articlesContainer.appendChild(paginationDiv);
-          }
+          // Pagination display removed per user request
         } else {
           articlesContainer.innerHTML =
             '<div class="card"><p>No stories are available right now for this topic.</p></div>';

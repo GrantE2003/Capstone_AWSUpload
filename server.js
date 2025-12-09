@@ -762,20 +762,21 @@ app.get('/api/guardian', async (req, res) => {
             },
             {
               role: 'user',
-              content: `You are summarizing news articles. Create an EXTREMELY detailed, comprehensive, information-dense summary that provides maximum information value. Your summary should be 12-18 sentences (about 350-500 words, MINIMUM 250 characters) and include EVERYTHING relevant:
+              content: `You are summarizing news articles. Create an EXTREMELY detailed, comprehensive, information-dense summary that provides maximum information value. Your summary should be 18-25 sentences (about 500-700 words, MINIMUM 400 characters) and include EVERYTHING relevant. Think broadly about the story - include not just the main event but all surrounding context, implications, and related information:
 
-- WHO: All key people, organizations, and entities involved with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
-- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
-- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, and temporal context.
-- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details.
-- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, and driving forces.
-- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, and implementation details.
-- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, and broader significance.
-- QUOTES: Important quotes from key sources if available, with attribution context.
-- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned.
-- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, and necessary background information.
-- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles.
-- ANALYSIS: Key insights, patterns, or important observations that emerge from the content.
+- WHO: All key people, organizations, and entities involved with their specific roles, titles, and relationships. Include full names, positions, affiliations, and their connections to each other. Mention all stakeholders, participants, and affected parties.
+- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions, outcomes, and sub-events. Cover all aspects of the story, not just the headline.
+- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, temporal context, and any relevant historical dates that provide context.
+- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details. Mention all locations involved.
+- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, driving forces, and the broader reasons this story matters. Include political, economic, social, or cultural context.
+- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, implementation details, and how events unfolded.
+- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, broader significance, and potential future developments. Discuss impact on different groups, sectors, or regions.
+- QUOTES: Important quotes from key sources if available, with attribution context. Include multiple perspectives and viewpoints.
+- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned. Include all numerical information.
+- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, necessary background information, and the broader situation that led to this story.
+- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles. Be comprehensive and include everything mentioned.
+- ANALYSIS: Key insights, patterns, or important observations that emerge from the content. Provide thoughtful analysis of what this story means and why it matters.
+- BROADER CONTEXT: Related stories, similar events, industry trends, or broader implications that help readers understand the full picture. Connect this story to larger themes or trends.
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 1. Your summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
@@ -789,14 +790,17 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 9. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
 10. Be thorough, detailed, and information-rich - readers should feel fully informed
 11. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
-12. The summary MUST be at least 250 characters long - be thorough and detailed enough to meet this requirement
+12. The summary MUST be at least 400 characters long - be thorough, broad, and detailed enough to meet this requirement
+13. Think BROADLY about the story - include all related information, context, implications, and background. Don't just focus on the main event, but provide a comprehensive overview that helps readers fully understand the story and its significance
+14. Include multiple perspectives, viewpoints, and angles from the different sources
+15. Connect the story to broader themes, trends, or related events when relevant
 
-Start your summary directly with the story content. Do not preface it with the title or source. NEVER repeat the title. MINIMUM LENGTH: 250 characters.
+Start your summary directly with the story content. Do not preface it with the title or source. NEVER repeat the title. MINIMUM LENGTH: 400 characters. Think comprehensively and include all relevant information that helps readers understand the full story.
 
 Article Content:\n${text}`
             }
           ],
-          max_tokens: 1500,
+          max_tokens: 2000,
           temperature: 0.3
         }, {
           headers: headers,

@@ -44,20 +44,21 @@ Return ONLY valid JSON with this exact shape:
 
 {
   "groupTitle": "A short, neutral, headline-style title (5-12 words) that describes the story as a whole. Do NOT copy any single article headline.",
-  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (12-18 sentences, about 350-500 words, MINIMUM 250 characters) that synthesizes information from ALL of the articles. The summary must be maximally informative and include EVERYTHING relevant:
+  "summary": "An EXTREMELY detailed, comprehensive, information-dense combined summary (18-25 sentences, about 500-700 words, MINIMUM 400 characters) that synthesizes information from ALL of the articles. The summary must be maximally informative, broad in scope, and include EVERYTHING relevant. Think broadly about the story - include not just the main event but all surrounding context, implications, and related information:
 
-- WHO: All key people, organizations, and entities with their specific roles, titles, and relationships. Include full names, positions, and affiliations.
-- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions and outcomes.
-- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, and temporal context.
-- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details.
-- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, and driving forces.
-- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, and implementation details.
-- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, and broader significance.
-- QUOTES: Important quotes from key sources if available, with attribution context.
-- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned.
-- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, and necessary background information.
-- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles.
-- ANALYSIS: Key insights, patterns, or important observations that emerge from synthesizing multiple sources.
+- WHO: All key people, organizations, and entities with their specific roles, titles, and relationships. Include full names, positions, affiliations, and their connections to each other. Mention all stakeholders, participants, and affected parties.
+- WHAT: The main event, action, or development with extensive specific details. Describe what happened step-by-step, including all relevant actions, outcomes, and sub-events. Cover all aspects of the story, not just the headline.
+- WHEN: Exact dates, times, and complete timeline of events. Include chronological sequence, duration, temporal context, and any relevant historical dates that provide context.
+- WHERE: Specific locations, regions, or places mentioned with full geographic context. Include addresses, cities, countries, regions, and any relevant location details. Mention all locations involved.
+- WHY: The reasons, causes, motivations, and deep context behind the story. Explain underlying factors, historical context, driving forces, and the broader reasons this story matters. Include political, economic, social, or cultural context.
+- HOW: The detailed process, methods, or mechanisms involved. Describe procedures, techniques, approaches, implementation details, and how events unfolded.
+- IMPACT: Comprehensive consequences, implications, or significance. Include immediate effects, long-term implications, affected parties, broader significance, and potential future developments. Discuss impact on different groups, sectors, or regions.
+- QUOTES: Important quotes from key sources if available, with attribution context. Include multiple perspectives and viewpoints.
+- NUMBERS: All specific statistics, figures, amounts, data points, percentages, measurements, and quantitative details mentioned. Include all numerical information.
+- BACKGROUND: Extensive relevant context that helps understand the story. Include historical context, previous related events, necessary background information, and the broader situation that led to this story.
+- DETAILS: All specific facts, names, dates, locations, numbers, and concrete information from the articles. Be comprehensive and include everything mentioned.
+- ANALYSIS: Key insights, patterns, or important observations that emerge from synthesizing multiple sources. Provide thoughtful analysis of what this story means and why it matters.
+- BROADER CONTEXT: Related stories, similar events, industry trends, or broader implications that help readers understand the full picture. Connect this story to larger themes or trends.
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 1. The summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
@@ -72,9 +73,12 @@ CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 10. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
 11. Synthesize information from ALL sources to provide the most complete picture possible
 12. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
-13. The summary MUST be at least 250 characters long - be thorough and detailed enough to meet this requirement
+13. The summary MUST be at least 400 characters long - be thorough, broad, and detailed enough to meet this requirement
+14. Think BROADLY about the story - include all related information, context, implications, and background. Don't just focus on the main event, but provide a comprehensive overview that helps readers fully understand the story and its significance
+15. Include multiple perspectives, viewpoints, and angles from the different sources
+16. Connect the story to broader themes, trends, or related events when relevant
 
-The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich. NEVER repeat the title. MINIMUM LENGTH: 250 characters."
+The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, broad in scope, and information-rich. NEVER repeat the title. MINIMUM LENGTH: 400 characters. Think comprehensively and include all relevant information that helps readers understand the full story."
 }`;
 
     let apiResponse;
@@ -90,7 +94,7 @@ The summary should provide complete, comprehensive understanding of the story wi
             },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 1800,
+          max_tokens: 2500,
           temperature: 0.3,
           response_format: { type: 'json_object' } // new-style JSON mode
         },
@@ -151,8 +155,8 @@ The summary should provide complete, comprehensive understanding of the story wi
         cleanedSummary = generateBasicSummary(group).summary;
       }
       
-      // ENFORCE MINIMUM LENGTH: Summaries must be at least 250 characters
-      const MIN_SUMMARY_LENGTH = 250;
+      // ENFORCE MINIMUM LENGTH: Summaries must be at least 400 characters
+      const MIN_SUMMARY_LENGTH = 400;
       if (cleanedSummary.length < MIN_SUMMARY_LENGTH) {
         console.warn(`[LLM] Summary too short (${cleanedSummary.length} chars), expanding...`);
         // Try to expand the summary by adding more detail from articles
@@ -269,7 +273,7 @@ function generateEnhancedBasicSummary(group) {
   }
   
   // Ensure minimum length - add more content if needed
-  const MIN_LENGTH = 250;
+  const MIN_LENGTH = 400;
   if (summary.length < MIN_LENGTH) {
     // Try to get more content from articles
     for (const article of articles) {
