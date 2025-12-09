@@ -213,9 +213,6 @@ function buildQueryWithCountry(originalQuery, countryCode) {
     return originalQuery;
   }
   
-  // Build country search terms - use country name and common variations
-  // The Guardian API searches article content, so we need to be more flexible
-  // Use quotes for exact phrases and OR for variations
   const countryVariations = {
     'US': ['United States', 'USA', 'US', 'America', 'American'],
     'GB': ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
@@ -237,22 +234,14 @@ function buildQueryWithCountry(originalQuery, countryCode) {
   const variations = countryVariations[countryCode] || [countryName, countryCode];
   const countryTerms = variations.map(term => `"${term}"`).join(' OR ');
   
-  // If there's already a query, combine it with country using AND
   if (originalQuery) {
     return `(${originalQuery}) AND (${countryTerms})`;
   }
-  // Otherwise, just search for the country
   return countryTerms;
 }
 
 /**
  * Determine if an article matches a specific country
- * This analyzes article title, content, section, and tags to determine geographic relevance
- * 
- * @param {Object} article - Article object from Guardian API
- * @param {string} targetCountryCode - ISO country code (e.g., 'US', 'GB')
- * @param {string} section - Section ID (e.g., 'sport', 'technology')
- * @returns {Object} - { matches: boolean, confidence: 'high'|'medium'|'low', reason: string }
  */
 function articleMatchesCountry(article, targetCountryCode, section) {
   const targetCountryName = getCountryName(targetCountryCode);
@@ -265,36 +254,27 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   const bodyText = (article.fields?.bodyText || '').toLowerCase();
   const sectionName = (article.sectionName || '').toLowerCase();
   const sectionId = (article.sectionId || '').toLowerCase();
-  // Tags can be an array of objects with webTitle or just strings
   const tags = (article.tags || []).map(tag => {
     if (typeof tag === 'string') return tag.toLowerCase();
     return (tag.webTitle || tag.id || '').toLowerCase();
   }).filter(Boolean);
 
-  // Combine all text for analysis
   const allText = `${title} ${trailText} ${bodyText} ${sectionName} ${tags.join(' ')}`.toLowerCase();
 
-  // Country-specific indicators with category-specific refinements
-  // Provider: Guardian API - uses webTitle, sectionName, tags, fields.trailText, fields.bodyText
-  // No explicit country field, but we infer via sectionName (e.g., 'US news', 'UK news'), tags, and content
   const countryIndicators = {
     'US': {
-      // Sports indicators
       sports: {
         positive: ['united states', 'usa', 'us ', 'american', 'america', 'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ncaa', 'college football', 'super bowl', 'world series', 'stanley cup', 'nba finals', 'march madness', 'nfl playoffs', 'nba playoffs', 'mlb playoffs', 'nhl playoffs', 'dodgers', 'yankees', 'lakers', 'warriors', 'cowboys', 'patriots'],
         negative: ['premier league', 'english', 'england', 'uk', 'british', 'britain', 'efl', 'championship', 'fa cup', 'scotland', 'wales', 'celtic', 'rangers', 'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'west ham', 'newcastle', 'brighton']
       },
-      // Politics indicators
       politics: {
         positive: ['united states', 'usa', 'us ', 'american', 'america', 'congress', 'senate', 'house of representatives', 'white house', 'supreme court', 'washington dc', 'capitol hill', 'president', 'senator', 'representative', 'democrat', 'republican', 'biden', 'trump', 'federal', 'us government', 'us politics'],
         negative: ['westminster', 'number 10', 'downing street', 'uk parliament', 'british parliament', 'house of commons', 'house of lords', 'prime minister', 'mp ', 'mps', 'tory', 'labour party', 'scottish parliament', 'welsh assembly']
       },
-      // Business indicators
       business: {
         positive: ['united states', 'usa', 'us ', 'american', 'america', 'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed', 'us economy', 'us market', 'wall street', 'us dollar', 'us companies', 'us business', 'us trade'],
         negative: ['ftse', 'london stock exchange', 'uk economy', 'uk market', 'pound sterling', 'bank of england', 'uk companies', 'uk business']
       },
-      // General positive/negative for all categories
       positive: ['united states', 'usa', 'us ', 'american', 'america'],
       negative: ['premier league', 'english', 'england', 'uk', 'british', 'britain', 'westminster', 'number 10', 'uk parliament', 'ftse', 'london stock exchange']
     },
@@ -332,11 +312,8 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     }
   };
 
-  // Get category-specific indicators if available, otherwise use general
   const indicators = countryIndicators[targetCountryCode];
   if (!indicators) {
-    // For countries without specific indicators, use generic matching
-    // Get country variations from the buildQueryWithCountry function's scope
     const countryVariationsMap = {
       'US': ['United States', 'USA', 'US', 'America', 'American'],
       'GB': ['United Kingdom', 'UK', 'Britain', 'British', 'England', 'English'],
@@ -363,12 +340,10 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     return { matches: hasCountryTerm, confidence: hasCountryTerm ? 'medium' : 'low', reason: hasCountryTerm ? 'Contains country term' : 'No country match' };
   }
 
-  // Get category-specific indicators
   const isSports = section === 'sport' || sectionId === 'sport';
   const isPolitics = section === 'politics' || sectionId === 'politics' || sectionName.includes('politics');
   const isBusiness = section === 'business' || sectionId === 'business' || sectionName.includes('business') || sectionName.includes('economy');
   
-  // Use category-specific indicators if available
   let categoryIndicators = null;
   if (isSports && indicators.sports) {
     categoryIndicators = indicators.sports;
@@ -378,13 +353,11 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     categoryIndicators = indicators.business;
   }
   
-  // Fall back to general indicators
   const activeIndicators = categoryIndicators || {
     positive: indicators.positive || [],
     negative: indicators.negative || []
   };
 
-  // Count positive and negative indicators
   let positiveCount = 0;
   let negativeCount = 0;
 
@@ -396,7 +369,6 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     if (allText.includes(term)) negativeCount++;
   });
   
-  // Also check sectionName for country indicators (Guardian uses sectionName like "US news", "UK news")
   const sectionNameLower = sectionName.toLowerCase();
   if (sectionNameLower.includes('us') || sectionNameLower.includes('usa') || sectionNameLower.includes('united states')) {
     if (targetCountryCode === 'US') positiveCount++;
@@ -408,13 +380,10 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   }
   
   if (isSports) {
-    // For sports, negative indicators strongly suggest non-match
     if (negativeCount > 0 && positiveCount === 0) {
       return { matches: false, confidence: 'high', reason: `Contains ${negativeCount} negative indicator(s) for sports` };
     }
-    // Need at least one positive indicator for sports
     if (positiveCount === 0 && negativeCount === 0) {
-      // Check if it's clearly about the target country using generic terms
       const genericCountryTerms = [
         targetCountryName.toLowerCase(),
         targetCountryCode.toLowerCase()
@@ -425,23 +394,17 @@ function articleMatchesCountry(article, targetCountryCode, section) {
       }
       return { matches: false, confidence: 'medium', reason: 'No country-specific sports indicators' };
     }
-    // If we have positive indicators, it's a match
     if (positiveCount > 0) {
       return { matches: true, confidence: positiveCount >= 2 ? 'high' : 'medium', reason: `Contains ${positiveCount} positive indicator(s)` };
     }
   } else {
-    // For non-sports categories, apply stricter filtering when country is set
-    // Politics and Business should be stricter than general/tech
     const isStrictCategory = isPolitics || isBusiness;
     
     if (isStrictCategory) {
-      // For politics and business, negative indicators strongly suggest non-match
       if (negativeCount > 0 && positiveCount === 0) {
         return { matches: false, confidence: 'high', reason: `Contains ${negativeCount} negative indicator(s) for ${section}` };
       }
-      // Need at least one positive indicator for strict categories
       if (positiveCount === 0 && negativeCount === 0) {
-        // Check generic country terms
         const genericCountryTerms = [
           targetCountryName.toLowerCase(),
           targetCountryCode.toLowerCase()
@@ -453,18 +416,15 @@ function articleMatchesCountry(article, targetCountryCode, section) {
         return { matches: false, confidence: 'medium', reason: `No country-specific indicators for ${section}` };
       }
     } else {
-      // For general/tech categories, more lenient but still filter strong negatives
       if (negativeCount > positiveCount && negativeCount >= 2) {
         return { matches: false, confidence: 'medium', reason: 'More negative than positive indicators' };
       }
     }
     
-    // If we have positive indicators, it's likely a match
     if (positiveCount > 0) {
       return { matches: true, confidence: positiveCount >= 2 ? 'high' : 'medium', reason: `Contains ${positiveCount} positive indicator(s)` };
     }
     
-    // For non-strict categories, also check generic country terms
     if (!isStrictCategory) {
       const genericCountryTerms = [
         targetCountryName.toLowerCase(),
@@ -477,24 +437,14 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     }
   }
 
-  // Default: if no clear indicators, be strict for sports and strict categories
-  // For sports and strict categories (politics, business), exclude if no indicators
   if (isSports || isPolitics || isBusiness) {
     return { matches: false, confidence: 'low', reason: `No country indicators found for ${section} article` };
   }
-  // For general/tech, allow global content but with low confidence
   return { matches: true, confidence: 'low', reason: 'No clear country indicators - allowing as global content' };
 }
 
 /**
  * Central country filter that applies to ALL categories
- * This is the main filtering function used across all news endpoints
- * 
- * @param {Array} articles - Array of article objects from Guardian API
- * @param {string} countryCode - ISO country code to filter by (e.g., 'US', 'GB')
- * @param {string} section - Section/category ID (e.g., 'sport', 'politics', 'business')
- * @param {boolean} includeInternational - Whether to include international/global articles (default: false for strict filtering)
- * @returns {Array} - Filtered array of articles
  */
 function filterArticlesByCountry(articles, countryCode, section, includeInternational = false) {
   if (!countryCode) {
@@ -509,17 +459,12 @@ function filterArticlesByCountry(articles, countryCode, section, includeInternat
     const match = articleMatchesCountry(article, countryCode, section);
     
     if (match.matches) {
-      // Include if it matches
       filtered.push(article);
     } else if (includeInternational && match.confidence === 'low') {
-      // Include low-confidence rejects if international toggle is on
       filtered.push(article);
     } else if (!isStrictCategory && match.confidence === 'low' && !includeInternational) {
-      // For non-strict categories (tech, general), allow low-confidence if international is off
-      // This is more lenient but still filters out clear mismatches
       filtered.push(article);
     }
-    // Otherwise, exclude the article (strict filtering by default)
   }
 
   console.log(`[COUNTRY FILTER] Filtered ${articles.length} articles to ${filtered.length} for country ${countryCode} (section: ${section}, strict: ${isStrictCategory})`);
@@ -543,7 +488,6 @@ app.get('/api/guardian', async (req, res) => {
   try {
     const { section, q, limit = 6, country } = req.query;
     
-    // Comprehensive backend logging
     console.log('[NEWS REQUEST - BACKEND]', {
       endpoint: '/api/guardian',
       query: req.query,
@@ -553,7 +497,6 @@ app.get('/api/guardian', async (req, res) => {
     });
     
     if (MOCK_MODE) {
-      // Return mock data when no API key
       const mockArticles = [
         {
           id: 'mock-1',
@@ -570,29 +513,24 @@ app.get('/api/guardian', async (req, res) => {
       return res.json({ items: mockArticles });
     }
 
-    // Build Guardian API URL
-    // Request tags for better country filtering
     const params = {
       'api-key': GUARDIAN_API_KEY,
       'show-fields': 'trailText,bodyText',
-      'show-tags': 'all', // Get tags for country filtering
-      'page-size': Math.min(limit * 3, 50), // Fetch more to account for filtering
+      'show-tags': 'all',
+      'page-size': Math.min(limit * 3, 50),
       'order-by': 'newest'
     };
 
     if (section) params.section = section;
     
-    // Build query with country filter if provided
     let query = q || '';
     if (country) {
-      // Clear cache for this country to ensure fresh results
       clearCacheForCountry(country);
       query = buildQueryWithCountry(query, country);
       console.log('Built query with country:', query);
     }
     if (query) params.q = query;
     
-    // Remove cache-busting timestamp parameter if present
     if (req.query._t) {
       delete params._t;
     }
@@ -602,17 +540,14 @@ app.get('/api/guardian', async (req, res) => {
     const cacheKey = getCacheKey(`${GUARDIAN_BASE_URL}/search`, params);
     console.log('Cache key:', cacheKey);
     
-    // Reduce cache time when country filter is active to get fresher results
     const cachedResult = getFromCache(cacheKey);
     
     if (cachedResult && !country) {
-      // Only use cache if no country filter (to allow testing)
       console.log('Returning cached result');
       return res.json(cachedResult);
     } else if (cachedResult && country) {
-      // For country-filtered results, use shorter cache or bypass
       const cacheAge = Date.now() - cachedResult.timestamp;
-      if (cacheAge < 10 * 1000) { // 10 seconds for country-filtered
+      if (cacheAge < 10 * 1000) {
         console.log('Returning cached country-filtered result (age:', cacheAge, 'ms)');
         return res.json(cachedResult);
       } else {
@@ -620,7 +555,6 @@ app.get('/api/guardian', async (req, res) => {
       }
     }
 
-    // Call Guardian API
     console.log('[NEWS API CALL]', {
       category: section || 'general',
       provider: 'Guardian',
@@ -634,13 +568,8 @@ app.get('/api/guardian', async (req, res) => {
       throw new Error(`Guardian API error: ${response.data.response.message}`);
     }
 
-    // Transform articles (keep original for filtering)
     let articles = response.data.response.results;
 
-    // Log sample response for inspection
-    // Provider: Guardian API - response structure: response.data.response.results[]
-    // Each article has: webTitle, sectionName, sectionId, tags[], fields.trailText, fields.bodyText
-    // No explicit country field, but we infer via sectionName, tags, and content analysis
     if (articles && articles.length > 0) {
       console.log('[NEWS API RESPONSE SAMPLE]', {
         category: section || 'general',
@@ -656,7 +585,6 @@ app.get('/api/guardian', async (req, res) => {
       });
     }
 
-    // Apply country filtering if country is specified
     const includeInternational = req.query.includeInternational === 'true';
     const originalCount = articles.length;
     
@@ -664,16 +592,8 @@ app.get('/api/guardian', async (req, res) => {
       console.log(`[COUNTRY FILTER] Applying filter: country=${country}, section=${section || 'none'}, includeInternational=${includeInternational}`);
       articles = filterArticlesByCountry(articles, country, section || '', includeInternational);
       console.log(`[COUNTRY FILTER] Filtered from ${originalCount} to ${articles.length} articles`);
-      
-      // If we don't have enough articles after filtering, try to get more
-      if (articles.length < limit && originalCount > 0) {
-        console.log(`Only ${articles.length} articles after filtering, requested ${limit}. Consider fetching more.`);
-      }
-      
-      // Limit to requested amount after filtering
       articles = articles.slice(0, limit);
     } else {
-      // If no country filter, just limit to requested amount
       articles = articles.slice(0, limit);
     }
 
@@ -690,7 +610,6 @@ app.get('/api/guardian', async (req, res) => {
       }))
     };
 
-    // Cache the result
     setCache(cacheKey, transformedResults);
     
     console.log(`Returning ${transformedResults.items.length} articles after country filtering`);
@@ -702,7 +621,7 @@ app.get('/api/guardian', async (req, res) => {
   }
 });
 
-    // AI Summarization endpoint
+    // AI Summarization endpoint (single-article)
     app.post('/api/summarize', async (req, res) => {
       try {
         const { text, title } = req.body;
@@ -721,7 +640,6 @@ app.get('/api/guardian', async (req, res) => {
           });
         }
 
-        // Check API key
         if (!OPENROUTER_API_KEY) {
           console.warn('[Summarize] No OpenRouter API key - using fallback summary');
           const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
@@ -736,15 +654,12 @@ app.get('/api/guardian', async (req, res) => {
         console.log('[Summarize] Calling OpenRouter API:', LLM_API_URL);
         console.log('[Summarize] Using model:', LLM_MODEL);
 
-        // For OpenRouter, add provider prefix if not already present (e.g., "openai/gpt-4o-mini")
         let modelToUse = LLM_MODEL;
         if (!modelToUse.includes('/')) {
-          // If model doesn't have provider prefix, add "openai/" prefix
           modelToUse = `openai/${modelToUse}`;
           console.log('[Summarize] Added provider prefix to model:', modelToUse);
         }
 
-        // Prepare headers for OpenRouter
         const headers = {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
@@ -752,7 +667,6 @@ app.get('/api/guardian', async (req, res) => {
           'X-Title': 'News Summarizer'
         };
 
-        // Call OpenRouter API
         const response = await axios.post(LLM_API_URL, {
           model: modelToUse,
           messages: [
@@ -814,7 +728,6 @@ Article Content:\n${text}`
           choicesLength: response.data?.choices?.length || 0
         });
 
-        // Extract summary from OpenRouter response
         let aiSummary = null;
         if (response.data && response.data.choices && response.data.choices.length > 0) {
           const firstChoice = response.data.choices[0];
@@ -836,17 +749,11 @@ Article Content:\n${text}`
           });
         }
 
-        // Clean summary: Remove any source names, titles, or reference markers
         aiSummary = aiSummary
-          // Remove source references like [GUARDIAN], [GDELT], [CURRENTS], etc.
           .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
-          // Remove patterns like "According to [SOURCE]" or "From [SOURCE]"
           .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
-          // Remove standalone source names in brackets
           .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
-          // Remove title references if they appear
           .replace(/title:\s*["'][^"']*["']/gi, '')
-          // Clean up extra whitespace
           .replace(/\s+/g, ' ')
           .trim();
 
@@ -864,7 +771,6 @@ Article Content:\n${text}`
           console.error('[Summarize] API response headers:', error.response.headers);
           console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
           
-          // OpenRouter error handling
           if (error.response.data) {
             if (error.response.status === 401) {
               console.error('[Summarize] OpenRouter: Authentication failed - check API key');
@@ -883,10 +789,8 @@ Article Content:\n${text}`
         }
         console.error('[Summarize] ========================================');
         
-        // Extract detailed error message
         let errorMessage = 'Unable to generate summary. Please try again later.';
         if (error.response?.data) {
-          // Extract error from OpenRouter response
           if (error.response.data.error) {
             if (typeof error.response.data.error === 'string') {
               errorMessage = error.response.data.error;
@@ -900,11 +804,9 @@ Article Content:\n${text}`
           } else if (typeof error.response.data === 'string') {
             errorMessage = error.response.data;
           } else {
-            // Try to extract any error information
             errorMessage = JSON.stringify(error.response.data);
           }
           
-          // Add status code context
           if (error.response.status === 401) {
             errorMessage = `Authentication failed: ${errorMessage}. Please check your API key.`;
           } else if (error.response.status === 402) {
@@ -923,10 +825,166 @@ Article Content:\n${text}`
       }
     });
 
+    // Multi-article search summarization endpoint (for search_results_loader.js)
+    app.post('/api/summarize/search', async (req, res) => {
+      try {
+        const { query, articles } = req.body || {};
+
+        console.log('[Search Summarize] ========================================');
+        console.log('[Search Summarize] Received summarize request');
+        console.log('[Search Summarize] Query:', query);
+        console.log('[Search Summarize] Articles count:', Array.isArray(articles) ? articles.length : 0);
+
+        if (!Array.isArray(articles) || articles.length === 0) {
+          return res.status(400).json({
+            error: 'At least one article is required for summarization',
+          });
+        }
+
+        const selected = articles.slice(0, 10);
+
+        const chunks = selected.map((a, idx) => {
+          const title = a.title || 'Untitled';
+          const source = a.source || a.sourceName || 'Unknown source';
+          const publishedAt = a.publishedAt || a.date || '';
+          const body =
+            a.content ||
+            a.description ||
+            a.summary ||
+            a.trailText ||
+            a.snippet ||
+            '';
+
+          return [
+            `Article ${idx + 1}:`,
+            `Title: ${title}`,
+            `Source: ${source}`,
+            publishedAt ? `Published: ${publishedAt}` : '',
+            `Content: ${body}`,
+          ]
+            .filter(Boolean)
+            .join('\n');
+        });
+
+        const combinedText = chunks.join('\n\n-----\n\n');
+
+        console.log('[Search Summarize] Combined text length:', combinedText.length);
+
+        if (!combinedText || combinedText.trim().length === 0) {
+          return res.status(400).json({
+            error: 'No article text available to summarize',
+          });
+        }
+
+        if (!OPENROUTER_API_KEY) {
+          console.warn('[Search Summarize] No OpenRouter API key - using fallback summary');
+
+          const fallback = selected
+            .map((a) => `• ${a.title || 'Untitled'} (${a.source || a.sourceName || 'Unknown'})`)
+            .join(' ');
+
+          return res.json({
+            aiSummary:
+              `This is a rough summary of ${selected.length} articles about "${query || 'this topic'}". ` +
+              `The sources cover related themes and perspectives. Headlines include: ${fallback}`,
+          });
+        }
+
+        let modelToUse = LLM_MODEL;
+        if (!modelToUse.includes('/')) {
+          modelToUse = `openai/${modelToUse}`;
+          console.log('[Search Summarize] Using model:', modelToUse);
+        }
+
+        const headers = {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:4000',
+          'X-Title': 'Multi-source Search Summarizer',
+        };
+
+        const userPrompt = `
+You are summarizing multiple news articles on the SAME topic.
+
+User search query (topic): "${query || 'N/A'}"
+
+Below is combined content from up to 10 different sources. Write ONE clear, neutral, multi-source summary.
+
+Requirements:
+- DO NOT mention article titles or source names.
+- DO NOT say "according to", "from [source]", or similar.
+- 8–14 sentences.
+- Cover the main points, areas of agreement, and any notable differences.
+- Include concrete facts, dates, locations, numbers, and key people when present.
+- Assume the reader will NOT see the original articles.
+
+Articles content:
+${combinedText}
+        `.trim();
+
+        console.log('[Search Summarize] Calling OpenRouter API:', LLM_API_URL);
+
+        const response = await axios.post(
+          LLM_API_URL,
+          {
+            model: modelToUse,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are a neutral news summarizer that combines multiple sources into a single, balanced overview. Never mention titles or sources by name.',
+              },
+              {
+                role: 'user',
+                content: userPrompt,
+              },
+            ],
+            max_tokens: 900,
+            temperature: 0.3,
+          },
+          {
+            headers,
+            timeout: 30000,
+          }
+        );
+
+        let aiSummary = null;
+        if (response.data?.choices?.length) {
+          aiSummary = response.data.choices[0]?.message?.content?.trim() || '';
+        }
+
+        if (!aiSummary) {
+          return res.status(500).json({
+            error: 'Failed to extract summary from AI response',
+          });
+        }
+
+        aiSummary = aiSummary.replace(/<[^>]+>/g, '').trim();
+        console.log('[Search Summarize] Summary length:', aiSummary.length);
+
+        return res.json({ aiSummary });
+      } catch (error) {
+        console.error('[Search Summarize] ERROR:', error.message);
+        if (error.response) {
+          console.error('[Search Summarize] API status:', error.response.status);
+          console.error('[Search Summarize] API data:', error.response.data);
+        }
+
+        let message = 'Unable to generate multi-article summary. Please try again later.';
+        if (error.response?.data?.error) {
+          message =
+            typeof error.response.data.error === 'string'
+              ? error.response.data.error
+              : error.response.data.error.message || message;
+        }
+
+        return res.status(500).json({
+          error: message,
+        });
+      }
+    });
+
 // News aggregation endpoint (multi-source)
-// CRITICAL: This route must be /api/news/aggregate
-// Frontend calls: GET /api/news/aggregate?category=business&country=US
-// PRODUCTION URL: https://www.4970capstone-mss.com/api/news/aggregate?category=business&country=US
 console.log('[Server] Loading newsAggregate router...');
 const newsAggregateRouter = require('./routes/newsAggregate');
 console.log('[Server] Mounting newsAggregate router at /api/news');
@@ -934,16 +992,16 @@ app.use('/api/news', newsAggregateRouter);
 console.log('[Server] ✓ Successfully mounted /api/news router');
 console.log('[Server] ✓ Route available at: GET /api/news/aggregate');
 
-// Log route registration for debugging
 console.log('[Server] ========================================');
 console.log('[Server] Registered API routes:');
-console.log('[Server]   GET /api/news/aggregate - News aggregation endpoint (CRITICAL)');
-console.log('[Server]   GET /api/health - Health check');
-console.log('[Server]   GET /api/topics - Topics list');
-console.log('[Server]   GET /api/search - Search endpoint');
-console.log('[Server]   GET /api/guardian - Guardian API proxy');
-console.log('[Server]   GET /api/section/:id - Section endpoint');
-console.log('[Server]   POST /api/summarize - Summarization endpoint');
+console.log('[Server]   GET  /api/news/aggregate - News aggregation endpoint (CRITICAL)');
+console.log('[Server]   GET  /api/health - Health check');
+console.log('[Server]   GET  /api/topics - Topics list');
+console.log('[Server]   GET  /api/search - Search endpoint');
+console.log('[Server]   GET  /api/guardian - Guardian API proxy');
+console.log('[Server]   GET  /api/section/:id - Section endpoint');
+console.log('[Server]   POST /api/summarize - Single-article summarization');
+console.log('[Server]   POST /api/summarize/search - Multi-article search summarization');
 console.log('[Server] ========================================');
 
 // Health check endpoint
@@ -959,14 +1017,12 @@ app.get('/api/topics', (req, res) => {
 // Search endpoint - queries all three sources and returns normalized articles
 app.get('/api/search', async (req, res) => {
   try {
-    // Get query string from frontend
     const query = req.query.q || '';
     const { section, page = 1, country } = req.query;
     
     console.log('[Search] Request received:', { query, section, page, country });
     
     if (MOCK_MODE) {
-      // Return mock data when no API key
       const filteredArticles = mockData.articles.filter(article => {
         if (section && article.sectionId !== section) return false;
         if (query && !article.title.toLowerCase().includes(query.toLowerCase())) return false;
@@ -984,12 +1040,10 @@ app.get('/api/search', async (req, res) => {
       });
     }
 
-    // Import fetch functions
     const { fetchGuardianArticles } = require('./services/guardianClient');
     const { fetchGdeltArticles } = require('./services/gdeltClient');
     const { fetchCurrentsArticles } = require('./services/currentsClient');
 
-    // Prepare query object for all three sources
     const newsQuery = {
       query: query,
       country: country || undefined,
@@ -999,8 +1053,6 @@ app.get('/api/search', async (req, res) => {
     console.log('[Search] Fetching from all three sources with query:', query || '(empty)');
     console.log('[Search] Query parameters:', JSON.stringify(newsQuery, null, 2));
 
-    // Fetch from all three sources in parallel
-    // Each function now returns normalized articles directly
     const [guardianResults, gdeltResults, currentsResults] = await Promise.allSettled([
       fetchGuardianArticles(newsQuery).catch(err => {
         console.error('[Search] Guardian API FAILED:');
@@ -1031,18 +1083,15 @@ app.get('/api/search', async (req, res) => {
       })
     ]);
 
-    // Extract results - each fetch function already returns normalized articles
     const guardianArticles = guardianResults.status === 'fulfilled' ? guardianResults.value : [];
     const gdeltArticles = gdeltResults.status === 'fulfilled' ? gdeltResults.value : [];
     const currentsArticles = currentsResults.status === 'fulfilled' ? currentsResults.value : [];
 
-    // Log results from each source (these logs are already in the fetch functions, but we'll summarize)
     console.log('[Search] Summary of results:');
     console.log(`   Guardian: ${Array.isArray(guardianArticles) ? guardianArticles.length : 0} articles`);
     console.log(`   GDELT: ${Array.isArray(gdeltArticles) ? gdeltArticles.length : 0} articles`);
     console.log(`   Currents: ${Array.isArray(currentsArticles) ? currentsArticles.length : 0} articles`);
 
-    // Combine all articles from all sources into one array
     const allArticles = [
       ...(Array.isArray(guardianArticles) ? guardianArticles : []),
       ...(Array.isArray(gdeltArticles) ? gdeltArticles : []),
@@ -1051,10 +1100,7 @@ app.get('/api/search', async (req, res) => {
 
     console.log(`[Search] Combined ${allArticles.length} articles from all sources`);
 
-    // Ensure all articles have required fields with fallbacks
-    // DO NOT filter out articles with missing descriptions - use fallback instead
     const validatedArticles = allArticles.map(article => {
-      // Ensure all required fields exist with fallbacks
       return {
         title: article.title || 'No title',
         description: article.description || 'No description available.',
@@ -1063,8 +1109,6 @@ app.get('/api/search', async (req, res) => {
         sourceName: article.sourceName || 'Unknown Source'
       };
     }).filter(article => {
-      // Only filter out articles missing critical fields (url and title)
-      // Description is optional - we use fallback instead
       const hasUrl = article.url && article.url.trim() !== '';
       const hasTitle = article.title && article.title.trim() !== '' && article.title !== 'No title';
       return hasUrl && hasTitle;
@@ -1072,7 +1116,6 @@ app.get('/api/search', async (req, res) => {
 
     console.log(`[Search] Validated ${validatedArticles.length} articles`);
 
-    // Remove duplicates based on URL (same article from different sources)
     const seenUrls = new Set();
     const deduplicatedArticles = validatedArticles.filter(article => {
       if (!article.url) return false;
@@ -1086,8 +1129,6 @@ app.get('/api/search', async (req, res) => {
 
     console.log(`[Search] Deduplicated to ${deduplicatedArticles.length} unique articles`);
 
-    // Return the articles array directly
-    // The frontend expects: { articles: [...] }
     const response = {
       articles: deduplicatedArticles
     };
@@ -1109,7 +1150,6 @@ app.get('/api/section/:id', async (req, res) => {
     const { id } = req.params;
     const { page = 1, country } = req.query;
     
-    // Comprehensive backend logging
     console.log('[NEWS REQUEST - BACKEND]', {
       endpoint: '/api/section/:id',
       sectionId: id,
@@ -1118,7 +1158,6 @@ app.get('/api/section/:id', async (req, res) => {
     });
 
     if (MOCK_MODE) {
-      // Return mock data for the section
       const sectionArticles = mockData.articles.filter(article => article.sectionId === id);
       
       return res.json({
@@ -1134,12 +1173,11 @@ app.get('/api/section/:id', async (req, res) => {
       'api-key': GUARDIAN_API_KEY,
       'section': id,
       'show-fields': 'headline,trailText,bodyText',
-      'show-tags': 'all', // Get tags for country filtering
-      'page-size': Math.min(30, 10 * 3), // Fetch more to account for filtering
+      'show-tags': 'all',
+      'page-size': Math.min(30, 10 * 3),
       'page': page
     };
 
-    // Add country filter to query if provided
     if (country) {
       clearCacheForCountry(country);
       const countryQuery = buildQueryWithCountry('', country);
@@ -1166,14 +1204,12 @@ app.get('/api/section/:id', async (req, res) => {
       }
     }
 
-    // Call Guardian API
     const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
     
     if (response.data.response.status !== 'ok') {
       throw new Error(`Guardian API error: ${response.data.response.message}`);
     }
 
-    // Log sample response
     let articles = response.data.response.results;
     if (articles && articles.length > 0) {
       console.log('[NEWS API RESPONSE SAMPLE]', {
@@ -1183,7 +1219,6 @@ app.get('/api/section/:id', async (req, res) => {
       });
     }
 
-    // Apply country filtering
     const includeInternational = req.query.includeInternational === 'true';
     const originalCount = articles.length;
     
@@ -1191,7 +1226,7 @@ app.get('/api/section/:id', async (req, res) => {
       console.log(`[COUNTRY FILTER] Applying filter: country=${country}, section=${id}, includeInternational=${includeInternational}`);
       articles = filterArticlesByCountry(articles, country, id, includeInternational);
       console.log(`[COUNTRY FILTER] Filtered from ${originalCount} to ${articles.length} articles`);
-      articles = articles.slice(0, 10); // Limit after filtering
+      articles = articles.slice(0, 10);
     } else {
       articles = articles.slice(0, 10);
     }
@@ -1204,7 +1239,6 @@ app.get('/api/section/:id', async (req, res) => {
       mockMode: false
     };
 
-    // Cache the result
     setCache(cacheKey, transformedResults);
     
     res.json(transformedResults);
@@ -1228,7 +1262,6 @@ app.get('/debug/news', async (req, res) => {
       });
     }
 
-    // Use the same logic as /api/guardian
     const params = {
       'api-key': GUARDIAN_API_KEY,
       'section': category,
@@ -1252,11 +1285,9 @@ app.get('/debug/news', async (req, res) => {
     let articles = response.data.response.results;
     const originalCount = articles.length;
 
-    // Apply filtering
     articles = filterArticlesByCountry(articles, country, category, false);
     articles = articles.slice(0, limit);
 
-    // Return debug info
     res.json({
       countryCode: country,
       category: category,
@@ -1284,32 +1315,23 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// CRITICAL: Static file serving must come AFTER API routes
-// This ensures /api/* requests are handled by API routes first
-// Only non-API requests will be served as static files
-
 // Middleware to inject API base URL into HTML files
 app.use((req, res, next) => {
   if (req.path.endsWith('.html') || req.path === '/') {
     const originalSend = res.send;
     res.send = function(data) {
       if (typeof data === 'string' && data.includes('</head>')) {
-        // Determine API base URL based on environment
         let apiBaseUrl;
         if (process.env.API_BASE_URL) {
-          // Explicit API base URL from environment
           apiBaseUrl = process.env.API_BASE_URL;
           console.log('[Server] Using API_BASE_URL from environment:', apiBaseUrl);
         } else if (process.env.NODE_ENV === 'production') {
-          // Production: use same origin (backend and frontend on same domain)
-          // Use FRONTEND_URL if set, otherwise use request origin
           apiBaseUrl = process.env.FRONTEND_URL || 
                       (req.protocol + '://' + req.get('host'));
           console.log('[Server] Production mode - API base URL:', apiBaseUrl);
           console.log('[Server] Request origin:', req.protocol + '://' + req.get('host'));
           console.log('[Server] FRONTEND_URL env:', process.env.FRONTEND_URL);
         } else {
-          // Development: use localhost
           apiBaseUrl = 'http://localhost:4000';
           console.log('[Server] Development mode - API base URL:', apiBaseUrl);
         }
@@ -1323,18 +1345,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from frontend directory (EXCLUDING /api/* paths)
-// CRITICAL: This must come AFTER all API routes are defined
+// Serve static files from frontend directory
 app.use((req, res, next) => {
-  // Skip static file serving for API routes - they should have been handled already
   if (req.path.startsWith('/api/')) {
-    return next(); // Let 404 handler catch unmatched API routes
+    return next();
   }
-  // For non-API routes, serve static files
   next();
 }, express.static('frontend', {
   setHeaders: (res, path) => {
-    // Set cache headers for HTML files
     if (path.endsWith('.html')) {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
@@ -1351,7 +1369,7 @@ app.get('/', (req, res) => {
 // 404 handler for API routes - provide detailed error
 app.use('/api/*', (req, res) => {
   console.error('[404] API route not found:', req.method, req.originalUrl);
-  console.error('[404] Available API routes: /api/health, /api/topics, /api/search, /api/guardian, /api/news/aggregate, /api/section/:id, /api/summarize');
+  console.error('[404] Available API routes: /api/health, /api/topics, /api/search, /api/guardian, /api/news/aggregate, /api/section/:id, /api/summarize, /api/summarize/search');
   res.status(404).json({ 
     error: 'API endpoint not found',
     method: req.method,
@@ -1363,18 +1381,17 @@ app.use('/api/*', (req, res) => {
       'GET /api/guardian',
       'GET /api/news/aggregate',
       'GET /api/section/:id',
-      'POST /api/summarize'
+      'POST /api/summarize',
+      'POST /api/summarize/search'
     ]
   });
 });
 
 // 404 handler for all other routes
 app.use('*', (req, res) => {
-  // Only return JSON for API-like requests, otherwise try to serve static file
   if (req.path.startsWith('/api/')) {
     res.status(404).json({ error: 'Endpoint not found', path: req.path });
   } else {
-    // For non-API routes, try to serve from static files
     res.status(404).send('Page not found');
   }
 });
@@ -1391,10 +1408,13 @@ app.listen(PORT, () => {
   console.log(`  Test URL: http://localhost:${PORT}/api/news/aggregate?category=business&country=US`);
   console.log(`========================================`);
   console.log(`Other available routes:`);
-  console.log(`  GET /api/health - Health check`);
-  console.log(`  GET /api/topics - Topics list`);
-  console.log(`  GET /api/search?q=technology - Search`);
-  console.log(`  GET /api/section/technology - Section`);
-  console.log(`  GET /api/news/test - Test route for news router`);
+  console.log(`  GET  /api/health`);
+  console.log(`  GET  /api/topics`);
+  console.log(`  GET  /api/search?q=technology`);
+  console.log(`  GET  /api/section/technology`);
+  console.log(`  GET  /api/guardian`);
+  console.log(`  POST /api/summarize`);
+  console.log(`  POST /api/summarize/search`);
+  console.log(`  GET  /api/news/test`);
   console.log(`========================================`);
 });
