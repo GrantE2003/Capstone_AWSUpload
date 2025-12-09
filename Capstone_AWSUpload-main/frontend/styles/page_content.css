@@ -1,0 +1,305 @@
+/* =========================================================
+    Main Page Layout Styling
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Uniform background for body and all pages */
+body {
+  background: var(--bg, #f8f9fa) !important;
+}
+
+/* Main Container for Page Layout */
+main {
+  max-width: 1100px;
+  margin: 2rem auto 0;
+  padding: 0 1rem 2.5rem;
+
+  /* Styles the Quick Link Cards - Uniform clean color scheme with royal blue accents */
+  --bg: #f8f9fa;
+  --text: #212529;
+  --muted: #6c757d;
+  --header-bg: var(--accent);
+  --border: #dee2e6;
+  --accent: #4169E1; /* Royal blue */
+  --accent-hover: #1E3A8A; /* Darker royal blue */
+  --pill-bg: #ffffff;
+  --pill-text: #212529;
+  --card-bg: #ffffff;
+  --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Uniform background for all pages */
+main {
+  background: var(--bg) !important;
+}
+
+/* Styles Each Pages Title */
+main h2 {
+  margin-bottom: 3rem;
+  font-size: 2.5rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* =========================================================
+    Controls the Layout of the Quick Link Cards
+   ========================================================= */
+
+/* Displays 3 Cards per row on "Large" Displays */
+.articles-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+/* Displays 2 Cards per row on "Medium" Displays*/
+@media (max-width: 900px) {
+  .articles-container {
+    align-items: stretch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Displays 1 Card per row on "Small" Displays */
+@media (max-width: 600px) {
+  .articles-container {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   Story Card Styling
+   ========================================================= */
+
+/* Main Styling for Each Card */
+.story-group-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Styles the Articles Title being Displayed */
+.story-title {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--text);
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* =========================================================
+   Styling for AI Summary Section and AI Summary Button
+   ========================================================= */
+
+/* Where the AI Summary is Displayed */
+.story-summary {
+  margin: 0 0 1rem 0;
+  padding-top: 1rem;
+}
+
+/* Summary Displayed in the Above Box */
+.summary-text {
+  margin: 0 0 0.5rem 0;
+  line-height: 1.6;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+/* "AI Generated Summary" Button Styling */
+.summary-read-more,
+.summary-read-less {
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.summary-read-more:hover,
+.summary-read-less:hover {
+  background: var(--accent-hover);
+}
+
+/* =========================================================
+    Styling for the Source Drop Down Component
+   ========================================================= */
+
+/* Container Around the Source Drop Down */
+.source-dropdown-container {
+  margin: 0.75rem 0;
+  position: relative;
+}
+
+/* Dropdown Button */
+.source-dropdown-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--text);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.source-dropdown-button:hover {
+  background: #e5e7eb;
+  border-color: var(--accent);
+}
+
+.source-dropdown-button:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Styles Text in Source Dropdown*/
+.dropdown-label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Dropdown Arrow Icon */
+.dropdown-arrow {
+  color: var(--muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+/* Dropdown the Displays the Source */
+.source-dropdown-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  margin-top: 0.25rem;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 100%;
+  width: max-content;
+}
+
+/* List Styling for the Source Dropdown */
+.sources-list {
+  list-style: none;
+  padding: 0.5rem 0;
+  margin: 0;
+}
+
+/* Styles the Sources Displayed */
+/* We only display one source now, but keep this so the way our source is displayed doesn't change */
+.source-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.2s;
+}
+
+.source-item:last-child {
+  border-bottom: none;
+}
+
+.source-item:hover {
+  background: #f9fafb;
+}
+
+/* Styling for the Source Name in the Dropdown */
+.source-name {
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 0.5rem;
+}
+
+/* Styling for Source Links */
+.source-article-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.source-article-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* =========================================================
+   Backup / Generic Card Style; Used When Loading or Displaying Error Messages
+   ========================================================= */
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+  font-size: 1.1rem;
+}
+
+.card p {
+  margin-top: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* =========================================================
+    Fallback in Case no Source Grouping is Possible
+   ========================================================= */
+
+/* Small Badge of the Source in Case of Fallback*/
+.article-source-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+/* =========================================================
+   "From: Source on Date" Styling
+   ========================================================= */
+
+/* Space Between Title and "From: Source on Date */
+.story-link-block {
+  margin-top: 0.5rem;
+}
+
+/* Color and Font Size for "From: Source on Date" */
+.story-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
