@@ -57,6 +57,18 @@ const API_BASE = (function () {
     return finalUrl;
   }
 
+  // Format date helper (same as Quick Links)
+  function formatDate(dateString) {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
   // Create source dropdown for a story group
   function createSourceDropdown(group) {
     if (!group.articles || group.articles.length === 0) {
@@ -163,86 +175,190 @@ const API_BASE = (function () {
     return dropdownContainer;
   }
 
-  // Render a story group with its summary and sources dropdown
+  // Render a story group - EXACT SAME STRUCTURE AS QUICK LINKS
   function renderStoryGroup(group, container) {
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'story-group-card';
-    groupDiv.setAttribute('data-group-id', group.groupId);
+    const groupDiv = document.createElement("div");
+    groupDiv.className = "story-group-card";
+    groupDiv.setAttribute("data-group-id", group.groupId || "");
 
-    const titleEl = document.createElement('h3');
-    titleEl.className = 'story-title';
-    titleEl.textContent = group.groupTitle || 'News Story';
+    const primaryArticle =
+      (group.articles && group.articles[0]) ||
+      group.mainArticle ||
+      group.article ||
+      null;
+
+    // Gets the Story Title
+    const titleEl = document.createElement("h3");
+    titleEl.className = "story-title";
+    titleEl.textContent =
+      (primaryArticle && (primaryArticle.title || primaryArticle.headline)) ||
+      (group.groupTitle && String(group.groupTitle)) ||
+      "Untitled story";
+
     groupDiv.appendChild(titleEl);
 
-    const summaryDiv = document.createElement('div');
-    summaryDiv.className = 'story-summary';
+    // Get the Source and Date Info (same as Quick Links)
+    if (primaryArticle) {
+      const linkWrapper = document.createElement("div");
+      linkWrapper.className = "story-link-block";
 
-    // Check for aiSummary first (new field name), then fallback to summary (for backwards compatibility)
-    let fullSummary = group.aiSummary || group.summary;
-    if (!fullSummary || fullSummary.trim().length === 0) {
-      const summaryParts = [];
-      if (group.articles && group.articles.length > 0) {
-        group.articles.forEach(article => {
-          if (article.description && article.description.trim().length > 20) {
-            const sentences = article.description
-              .split(/[.!?]+/)
-              .filter(s => s.trim().length > 0);
-            if (sentences.length > 0) {
-              summaryParts.push(sentences[0].trim());
-            }
-          }
-        });
+      const metaEl = document.createElement("p");
+      metaEl.className = "story-meta";
+
+      const sourceName =
+        primaryArticle.sourceName || primaryArticle.source || "Unknown source";
+      const dateStr = formatDate(primaryArticle.publishedAt);
+
+      if (dateStr) {
+        metaEl.textContent = `From: ${sourceName} on ${dateStr}`;
+      } else {
+        metaEl.textContent = `From: ${sourceName}`;
       }
-      fullSummary =
-        summaryParts.length > 0
-          ? summaryParts.slice(0, 2).join(' ') + '.'
-          : 'Multiple sources covered this story. Please review the articles below for details.';
+
+      linkWrapper.appendChild(metaEl);
+      groupDiv.appendChild(linkWrapper);
     }
 
-    const summaryPreview =
-      fullSummary.length > 250
-        ? fullSummary.substring(0, 250) + '...'
-        : fullSummary;
-    const needsExpansion = fullSummary.length > 250;
+    // AI Generated Summary Section; Hidden until Requested (same as Quick Links)
+    const summaryDiv = document.createElement("div");
+    summaryDiv.className = "story-summary";
+    summaryDiv.style.display = "none";
 
-    const summaryText = document.createElement('p');
-    summaryText.className = 'summary-text';
-    summaryText.textContent = needsExpansion ? summaryPreview : fullSummary;
+    const summaryText = document.createElement("p");
+    summaryText.className = "summary-text";
     summaryDiv.appendChild(summaryText);
-
-    if (needsExpansion) {
-      const readMoreLink = document.createElement('a');
-      readMoreLink.href = '#';
-      readMoreLink.className = 'read-more-link';
-      readMoreLink.textContent = 'Read more';
-
-      const readLessLink = document.createElement('a');
-      readLessLink.href = '#';
-      readLessLink.className = 'read-less-link';
-      readLessLink.textContent = 'Read less';
-      readLessLink.style.display = 'none';
-
-      readMoreLink.addEventListener('click', function (e) {
-        e.preventDefault();
-        summaryText.textContent = fullSummary;
-        readMoreLink.style.display = 'none';
-        readLessLink.style.display = 'inline';
-      });
-
-      readLessLink.addEventListener('click', function (e) {
-        e.preventDefault();
-        summaryText.textContent = summaryPreview;
-        readLessLink.style.display = 'none';
-        readMoreLink.style.display = 'inline';
-        summaryDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-
-      summaryDiv.appendChild(readMoreLink);
-      summaryDiv.appendChild(readLessLink);
-    }
-
     groupDiv.appendChild(summaryDiv);
 
+    // AI Summary Button; Fetches Summary then Displays It (same as Quick Links)
+    const summaryButton = document.createElement("button");
+    summaryButton.type = "button";
+    summaryButton.className = "summary-read-more";
+    summaryButton.textContent = "View AI Generated Summary";
+
+    summaryButton.addEventListener("click", async () => {
+      // If the Summary is Already Loaded, Toggle Visibility on Button Click
+      if (summaryDiv.dataset.loaded === "true") {
+        const isHidden = summaryDiv.style.display === "none";
+        summaryDiv.style.display = isHidden ? "block" : "none";
+        summaryButton.textContent = isHidden
+          ? "Hide Summary"
+          : "View AI Generated Summary";
+        return;
+      }
+
+      // First Time Click; Fetch Summary from Backend
+      summaryDiv.style.display = "block";
+      summaryText.textContent = "Loading summary...";
+      summaryButton.disabled = true;
+
+      try {
+        const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+        const summarizeUrl = `${base}/api/summarize`;
+
+        const articleForSummary =
+          primaryArticle || (group.articles && group.articles[0]) || {};
+        const titleForSummary =
+          group.groupTitle ||
+          articleForSummary.title ||
+          articleForSummary.headline ||
+          "News article";
+
+        const textForSummary =
+          (group.fullArticleText && String(group.fullArticleText)) ||
+          (group.summary && String(group.summary)) ||
+          (group.aiSummary && String(group.aiSummary)) ||
+          articleForSummary.description ||
+          articleForSummary.trailText ||
+          articleForSummary.snippet ||
+          articleForSummary.content ||
+          "";
+
+        console.log("[Search Results Loader] Requesting summary for:", titleForSummary);
+        console.log("[Search Results Loader] Text length:", textForSummary.length);
+
+        if (!textForSummary || textForSummary.trim().length === 0) {
+          throw new Error("No article text available for summarization");
+        }
+
+        const resp = await fetch(summarizeUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: titleForSummary,
+            text: textForSummary,
+          }),
+        });
+
+        console.log("[Search Results Loader] Summary response status:", resp.status, resp.statusText);
+
+        const result = await resp.json().catch(async (parseError) => {
+          console.error("[Search Results Loader] Failed to parse JSON response:", parseError);
+          const textResponse = await resp.text();
+          console.error("[Search Results Loader] Raw response:", textResponse);
+          throw new Error(`Server returned invalid response: ${resp.status} ${resp.statusText}`);
+        });
+
+        console.log("[Search Results Loader] Summary response received:", {
+          status: resp.status,
+          statusText: resp.statusText,
+          hasAiSummary: !!result.aiSummary,
+          hasSummary: !!result.summary,
+          hasError: !!result.error,
+          resultKeys: Object.keys(result)
+        });
+
+        // Check if response indicates an error
+        if (!resp.ok || result.error) {
+          const errorMessage = result.aiSummary || result.error || `Request failed: ${resp.status} ${resp.statusText}`;
+          throw new Error(errorMessage);
+        }
+
+        // Read aiSummary field (primary), fallback to summary for backwards compatibility
+        const rawSummary =
+          result.aiSummary ||
+          result.summary ||
+          "Summary not available. Please open the full article for details.";
+
+        // Removes HTML Markup from Summary
+        const cleanSummary = String(rawSummary).replace(/<[^>]+>/g, "").trim();
+
+        if (cleanSummary.length === 0) {
+          throw new Error("Received empty summary from server");
+        }
+
+        // Success - display the summary
+        summaryText.textContent = cleanSummary;
+        summaryText.style.color = "";
+        summaryDiv.dataset.loaded = "true";
+        summaryButton.textContent = "Hide Summary";
+      } catch (err) {
+        console.error("[Search Results Loader] Error fetching summary:", err);
+        console.error("[Search Results Loader] Error details:", {
+          message: err.message,
+          stack: err.stack,
+          name: err.name
+        });
+        
+        // Extract error message
+        let errorMessage = err.message || "Sorry, we couldn't load a summary right now. Please try again later.";
+        
+        if (errorMessage.startsWith("Error: ")) {
+          errorMessage = errorMessage.substring(7);
+        }
+        
+        summaryText.textContent = errorMessage;
+        summaryText.style.color = "#d32f2f";
+        summaryText.style.fontStyle = "italic";
+        summaryDiv.dataset.loaded = "false";
+        summaryButton.textContent = "View AI Generated Summary";
+      } finally {
+        summaryButton.disabled = false;
+      }
+    });
+
+    groupDiv.appendChild(summaryButton);
+
+    // Source Dropdown (same as Quick Links)
     const sourceDropdown = createSourceDropdown(group);
     if (sourceDropdown) {
       groupDiv.appendChild(sourceDropdown);
