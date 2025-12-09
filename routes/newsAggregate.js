@@ -865,6 +865,23 @@ router.get('/aggregate', async (req, res) => {
       }
     }
 
+    // For search queries, if we still have no groups but have articles, create fallback groups
+    // This is a second check in case the first fallback didn't work
+    if (isSearch && summarizedGroups.length === 0 && articlesWithSource.length > 0) {
+      console.log('[Aggregate] SEARCH MODE: Still no groups after summarization, creating fallback groups from', articlesWithSource.length, 'articles');
+      const fallbackGroups = articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2).map((article, index) => ({
+        groupId: `fallback-${index}`,
+        groupTitle: article.title || 'Untitled article',
+        summary: article.description || 'No summary available.',
+        aiSummary: article.description || 'No summary available.',
+        articles: [article],
+        sourceCount: 1,
+        sources: [article.sourceName || article.source || 'Unknown']
+      }));
+      summarizedGroups.push(...fallbackGroups);
+      console.log('[Aggregate] Created', fallbackGroups.length, 'fallback groups from individual articles');
+    }
+
     // Apply universal pagination - ALL views paginate at 18 groups per page
     let finalGroups = summarizedGroups;
     let totalGroups = summarizedGroups.length;
@@ -903,12 +920,17 @@ router.get('/aggregate', async (req, res) => {
       finalGroups = finalGroups.slice(0, GROUPS_PER_PAGE);
     }
 
+    // Final safety check for search: if we have articles but no groups, ensure rawArticles are included
+    const rawArticlesToReturn = isSearch && finalGroups.length === 0 && articlesWithSource.length > 0
+      ? articlesWithSource.slice(0, MAX_GROUPS_PER_PAGE * 2) // Return more raw articles for search
+      : articlesWithSource;
+
     const responsePayload = {
       query: query || '',
       country: country || undefined,
       category: category || undefined,
       groupedArticles: finalGroups,
-      rawArticles: articlesWithSource,
+      rawArticles: rawArticlesToReturn,
       pagination: {
         currentPage: currentPage,
         totalPages: totalPages,
@@ -917,6 +939,14 @@ router.get('/aggregate', async (req, res) => {
       },
       ...(warnings.length > 0 && { warnings })
     };
+    
+    // Log final payload for debugging
+    console.log('[Aggregate] Final response payload:', {
+      groupedArticlesCount: finalGroups.length,
+      rawArticlesCount: rawArticlesToReturn.length,
+      isSearch,
+      query: query || '(none)'
+    });
 
     if (finalGroups.length === 0 && articlesWithSource.length > 0) {
       console.warn('[Aggregate] WARNING: No groups created, but raw articles exist.');
@@ -933,9 +963,16 @@ router.get('/aggregate', async (req, res) => {
     
     // For search queries, if we have articles but no groups, log detailed info
     if (isSearch && finalGroups.length === 0 && articlesWithSource.length > 0) {
-      console.warn('[Aggregate] SEARCH MODE: No groups to return, but we have', articlesWithSource.length, 'raw articles');
-      console.warn('[Aggregate] This might indicate all groups were filtered out or summarization failed');
-      console.warn('[Aggregate] Frontend should display raw articles as fallback');
+      console.error('[Aggregate] SEARCH MODE ERROR: No groups to return, but we have', articlesWithSource.length, 'raw articles');
+      console.error('[Aggregate] This indicates all groups were filtered out or summarization failed');
+      console.error('[Aggregate] Frontend should display raw articles as fallback');
+      console.error('[Aggregate] This should not happen if fallback mechanism is working correctly');
+    }
+    
+    // Final check: if search has no groups and no articles, log it
+    if (isSearch && finalGroups.length === 0 && articlesWithSource.length === 0) {
+      console.error('[Aggregate] SEARCH MODE ERROR: No groups AND no articles returned');
+      console.error('[Aggregate] This indicates APIs are not returning results for query:', query);
     }
     
     res.json(responsePayload);

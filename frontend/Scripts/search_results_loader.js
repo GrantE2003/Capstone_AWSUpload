@@ -559,6 +559,16 @@ const API_BASE = (function () {
           return;
         }
 
+        // Log full data structure for debugging
+        console.log('[Search Results] Full data structure:', {
+          hasGroupedArticles: !!data.groupedArticles,
+          groupedArticlesLength: data.groupedArticles?.length || 0,
+          hasRawArticles: !!data.rawArticles,
+          rawArticlesLength: data.rawArticles?.length || 0,
+          noResults: data.noResults,
+          warnings: data.warnings
+        });
+
         if (data.groupedArticles && data.groupedArticles.length > 0) {
           // Less aggressive filtering - only filter out groups that are clearly title-only
           const groupsWithSummaries = data.groupedArticles.filter(group => {
@@ -610,6 +620,7 @@ const API_BASE = (function () {
                 '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
             }
           } else {
+            console.log('[Search Results] Rendering', groupsWithSummaries.length, 'groups');
             groupsWithSummaries.forEach(group => {
               renderStoryGroup(group, articlesContainer);
             });
@@ -617,6 +628,7 @@ const API_BASE = (function () {
 
           // Pagination display removed per user request
         } else if (data.rawArticles && data.rawArticles.length > 0) {
+          console.log('[Search Results] No groupedArticles, but have', data.rawArticles.length, 'raw articles - displaying them');
           // Fallback: show raw articles if no groups were created
           console.log('[Search Results] No groups found, displaying', data.rawArticles.length, 'raw articles');
           articlesContainer.innerHTML = '<div class="card"><p style="font-weight: bold; margin-bottom: 15px;">Found ' + data.rawArticles.length + ' articles:</p></div>';
