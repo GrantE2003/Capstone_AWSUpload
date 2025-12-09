@@ -6,24 +6,34 @@
   box-sizing: border-box;
 }
 
+/* Uniform background for body and all pages */
+body {
+  background: var(--bg, #f8f9fa) !important;
+}
+
 /* Main Container for Page Layout */
 main {
   max-width: 1100px;
   margin: 2rem auto 0;
   padding: 0 1rem 2.5rem;
 
-  /* Styles the Quick Link Cards */
-  --bg: #ffffff;
-  --text: #000000;
-  --muted: #6b7280;        /* gray-500 */
+  /* Styles the Quick Link Cards - Uniform clean color scheme */
+  --bg: #f8f9fa;
+  --text: #212529;
+  --muted: #6c757d;
   --header-bg: var(--accent);
-  --border: #e5e7eb;       /* gray-200 */
-  --accent: #2563eb;       /* blue-600 */
-  --accent-hover: #1d4ed8; /* blue-700 */
-  --pill-bg: #eef2ff;      /* indigo-50 */
-  --pill-text: #3730a3;    /* indigo-800 */
+  --border: #dee2e6;
+  --accent: #495057;
+  --accent-hover: #343a40;
+  --pill-bg: #ffffff;
+  --pill-text: #212529;
   --card-bg: #ffffff;
   --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Uniform background for all pages */
+main {
+  background: var(--bg) !important;
 }
 
 /* Styles Each Pages Title */

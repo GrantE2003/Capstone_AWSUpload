@@ -171,9 +171,31 @@ The summary should provide complete, comprehensive understanding of the story wi
       }
     }
 
+    // Check if summary is just repeating the title - if so, don't return it
+    const firstArticle = group.articles[0];
+    if (firstArticle && firstArticle.title) {
+      const normalizedTitle = (firstArticle.title || '').toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+      const normalizedSummary = cleanedSummary.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+      
+      // Calculate word overlap
+      const titleWords = new Set(normalizedTitle.split(/\s+/).filter(w => w.length > 2));
+      const summaryWords = normalizedSummary.split(/\s+/).filter(w => w.length > 2);
+      const matchingWords = summaryWords.filter(w => titleWords.has(w));
+      const overlapRatio = summaryWords.length > 0 ? matchingWords.length / summaryWords.length : 0;
+      
+      // If summary is too similar to title (high overlap or starts with title), use fallback
+      if (normalizedSummary === normalizedTitle ||
+          normalizedSummary.startsWith(normalizedTitle) ||
+          normalizedTitle.startsWith(normalizedSummary) ||
+          (overlapRatio > 0.6 && summaryWords.length < 20)) { // High overlap with short summary = likely just title
+        console.warn('[LLM] Summary is too similar to title, using enhanced basic summary');
+        cleanedSummary = generateEnhancedBasicSummary(group);
+      }
+    }
+
     const summary = cleanedSummary;
 
-    // Clean up / regenerate title if it’s too generic
+    // Clean up / regenerate title if it's too generic
     const genericPatterns = ['news story', 'story 1', 'story 2', 'latest news', 'news coverage', 'breaking news'];
     const isGenericTitle =
       !rawTitle ||

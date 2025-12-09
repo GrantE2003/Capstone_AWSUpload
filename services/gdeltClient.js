@@ -123,7 +123,7 @@ async function fetchGdeltArticles({ query, country, category }) {
             normalizedDesc === normalizedTitle ||
             normalizedDesc.startsWith(normalizedTitle) ||
             normalizedTitle.startsWith(normalizedDesc) ||
-            overlapRatio > 0.7) { // If more than 70% of description words match title words
+            overlapRatio > 0.6) { // Lowered from 0.7 to 0.6 - more aggressive filtering
           description = 'No description available.';
         }
         
@@ -138,7 +138,17 @@ async function fetchGdeltArticles({ query, country, category }) {
           sourceName: 'GDELT'
         };
       })
-      .filter(article => article.url && article.title); // Final validation - must have URL and title
+      .filter(article => {
+        // Final validation - must have URL, title, AND a valid description (not just "No description available")
+        const hasUrl = article.url && article.url.trim() !== '';
+        const hasTitle = article.title && article.title.trim() !== '' && article.title !== 'No title';
+        const hasValidDescription = article.description && 
+                                    article.description !== 'No description available.' && 
+                                    article.description.trim().length > 50;
+        
+        // For GDELT, we're more strict - filter out articles without good descriptions
+        return hasUrl && hasTitle && hasValidDescription;
+      })
 
     console.log(`GDELT returned ${normalizedArticles.length} results`);
     

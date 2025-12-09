@@ -249,6 +249,24 @@ const API_BASE = (function () {
       // Check if summary already exists in group data (from aggregate endpoint)
       const existingSummary = group.aiSummary || group.summary;
       if (existingSummary && existingSummary.trim().length > 20) {
+        // Check if summary is just the title - if so, don't show it
+        const articleForTitle = primaryArticle || (group.articles && group.articles[0]) || {};
+        const articleTitle = articleForTitle.title || group.groupTitle || '';
+        
+        if (articleTitle) {
+          const normalizedTitle = articleTitle.toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+          const normalizedSummary = String(existingSummary).toLowerCase().trim().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ');
+          
+          // If summary is essentially the title, don't show it
+          if (normalizedSummary === normalizedTitle || 
+              normalizedSummary.startsWith(normalizedTitle) ||
+              normalizedTitle.startsWith(normalizedSummary)) {
+            console.log('[Search Results] Summary is just the title, not displaying');
+            summaryButton.style.display = 'none';
+            return;
+          }
+        }
+        
         // Use pre-generated summary from aggregate endpoint
         const cleanSummary = String(existingSummary).replace(/<[^>]+>/g, "").trim();
         summaryText.textContent = cleanSummary;
