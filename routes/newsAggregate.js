@@ -200,32 +200,18 @@ router.get('/aggregate', async (req, res) => {
 
     // Balance articles from each source to prevent one source from dominating
     // Take up to 30 articles from each source to ensure diversity
-    // CRITICAL: Ensure we get articles from ALL available sources
     const MAX_ARTICLES_PER_SOURCE = 30;
-    const MIN_ARTICLES_PER_SOURCE = 10; // Try to get at least 10 from each source if available
-    
     const balancedGuardian = Array.isArray(guardianArticles) 
-      ? guardianArticles.slice(0, Math.max(MIN_ARTICLES_PER_SOURCE, Math.min(MAX_ARTICLES_PER_SOURCE, guardianArticles.length))) 
+      ? guardianArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
       : [];
     const balancedGdelt = Array.isArray(gdeltArticles) 
-      ? gdeltArticles.slice(0, Math.max(MIN_ARTICLES_PER_SOURCE, Math.min(MAX_ARTICLES_PER_SOURCE, gdeltArticles.length))) 
+      ? gdeltArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
       : [];
     const balancedCurrents = Array.isArray(currentsArticles) 
-      ? currentsArticles.slice(0, Math.max(MIN_ARTICLES_PER_SOURCE, Math.min(MAX_ARTICLES_PER_SOURCE, currentsArticles.length))) 
+      ? currentsArticles.slice(0, MAX_ARTICLES_PER_SOURCE) 
       : [];
 
     console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}`);
-    
-    // CRITICAL: Log if we're missing sources
-    if (balancedGuardian.length === 0 && guardianCount > 0) {
-      console.error('[Aggregate] ERROR: Guardian articles available but not included!');
-    }
-    if (balancedGdelt.length === 0 && gdeltCount > 0) {
-      console.error('[Aggregate] ERROR: GDELT articles available but not included!');
-    }
-    if (balancedCurrents.length === 0 && currentsCount > 0) {
-      console.error('[Aggregate] ERROR: Currents articles available but not included!');
-    }
 
     // Combine all normalized articles into ONE pool before grouping
     // Interleave articles from different sources to improve cross-source grouping
@@ -292,8 +278,8 @@ router.get('/aggregate', async (req, res) => {
     }
 
     // Group similar articles ACROSS ALL SOURCES
-    // Focus on title-based grouping - articles with similar titles should definitely group
-    const similarityThreshold = 0.20; // Lowered to 0.20 to group more articles with similar titles
+    // Lower threshold to improve cross-source grouping - articles about same story should group
+    const similarityThreshold = 0.25; // Lowered from 0.35 to group more similar articles
     const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
     
     // CRITICAL: Ensure grouping actually happened
@@ -311,28 +297,20 @@ router.get('/aggregate', async (req, res) => {
     );
 
     // Log group composition by source to verify cross-source grouping
-    let multiSourceCount = 0;
-    let singleSourceCount = 0;
     groups.forEach((group, idx) => {
       const sources = {};
       group.articles.forEach(article => {
         sources[article.source] = (sources[article.source] || 0) + 1;
       });
-      const sourceCount = Object.keys(sources).length;
-      if (sourceCount > 1) {
-        multiSourceCount++;
-      } else {
-        singleSourceCount++;
-      }
       const sourceStr = Object.entries(sources)
         .map(([s, c]) => `${s}:${c}`)
         .join(', ');
-      const firstTitle = group.articles[0]?.title?.substring(0, 50) || 'No title';
       console.log(
-        `   Group ${idx + 1}: ${group.articles.length} articles from ${sourceCount} source(s) [${sourceStr}] - "${firstTitle}..."`
+        `   Group ${idx + 1}: ${group.articles.length} articles from ${
+          Object.keys(sources).length
+        } source(s) [${sourceStr}]`
       );
     });
-    console.log(`[Aggregate] Grouping summary: ${multiSourceCount} multi-source groups, ${singleSourceCount} single-source groups`);
     console.log('');
 
     // Filter groups to remove duplicates and ensure quality

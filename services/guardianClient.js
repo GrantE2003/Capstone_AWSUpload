@@ -30,10 +30,12 @@ async function fetchGuardianArticles({ query, country, category }) {
     const hasSearchQuery = query && query.trim().length > 0;
     const hasCategory = category && category.trim().length > 0;
 
+    let searchQuery = null; // Initialize for logging
+
     // If search query is provided, use it (search mode)
     if (hasSearchQuery) {
       // Build query with country filter if provided
-      let searchQuery = query.trim();
+      searchQuery = query.trim();
       if (country) {
         const countryName = getCountryName(country);
         if (countryName) {
@@ -66,6 +68,7 @@ async function fetchGuardianArticles({ query, country, category }) {
         if (countryName) {
           const countryTerms = [countryName, country.toUpperCase()].map(term => `"${term}"`).join(' OR ');
           params.q = countryTerms;
+          searchQuery = countryTerms; // Set for logging
         }
       }
     }
@@ -75,7 +78,11 @@ async function fetchGuardianArticles({ query, country, category }) {
       return [];
     }
 
-    console.log('[Guardian] Fetching articles with query:', searchQuery || 'none');
+    console.log('[Guardian] Fetching articles with params:', {
+      query: searchQuery || params.q || 'none',
+      section: params.section || 'none',
+      country: country || 'none'
+    });
 
     const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params, timeout: 15000 });
     
