@@ -29,25 +29,13 @@
     return null;
   }
 
-  // NEW: formatDate helper
-  function formatDate(dateString) {
-    if (!dateString) return "";
-    const d = new Date(dateString);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }
-
   // Read `?q=` from URL or lastSearch
   function getSearchQuery() {
     const params = new URLSearchParams(window.location.search);
     return params.get("q") || localStorage.getItem("app:lastSearch") || "";
   }
 
-  // Build URL to your search / aggregate endpoint
+  // Build URL to your search endpoint
   function buildSearchUrl(query) {
     const countryCode = getCountryCode();
     const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
@@ -59,6 +47,18 @@
     const finalUrl = url.toString();
     console.log("[Search Loader] Fetching search from:", finalUrl);
     return finalUrl;
+  }
+
+  // Format date for display
+  function formatDate(dateString) {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   }
 
   // Normalize different article shapes into one shape
@@ -96,58 +96,66 @@
       raw.snippet ||
       "";
 
-    return { title, url, source, publishedAt, content };
+    return { title, url, source, publishedAt, content, raw };
   }
 
-  // Deduplicate & pick up to 10 articles from different sources
-  function pickTopArticles(articles, maxCount = 10) {
-    const bySource = new Map();
+  // Choose up to maxCount articles MOST related to the query
+  function selectRelevantArticles(rawArticles, query, maxCount = 10) {
+    const normArticles = rawArticles
+      .map(normalizeArticle)
+      .filter(a => a && a.url && a.title);
 
-    for (const raw of articles) {
-      const a = normalizeArticle(raw);
-      if (!a || !a.url) continue;
-
-      if (!bySource.has(a.source)) {
-        bySource.set(a.source, []);
-      }
-      bySource.get(a.source).push(a);
+    if (!query) {
+      // No query? Just take the newest ones.
+      return normArticles
+        .sort((a, b) => {
+          const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+          const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          return db - da;
+        })
+        .slice(0, maxCount);
     }
 
-    // Sort each source's list by date (newest first)
-    for (const [source, list] of bySource.entries()) {
-      list.sort((a, b) => {
-        const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-        const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-        return db - da;
-      });
-      bySource.set(source, list);
-    }
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    // Simple round-robin: one article per source until we have maxCount
-    const selected = [];
-    const sources = Array.from(bySource.keys());
+    const scored = normArticles.map(a => {
+      const text = (
+        (a.title || "") +
+        " " +
+        (a.content || "")
+      ).toLowerCase();
 
-    let index = 0;
-    while (selected.length < maxCount && sources.length > 0) {
-      const source = sources[index];
-      const list = bySource.get(source);
-      const article = list.shift();
-
-      if (article) {
-        selected.push(article);
+      let score = 0;
+      for (const term of terms) {
+        if (text.includes(term)) score++;
       }
 
-      if (list.length === 0) {
-        bySource.delete(source);
-        sources.splice(index, 1);
-        if (sources.length === 0) break;
-        index = index % sources.length;
-      } else {
-        index = (index + 1) % sources.length;
-      }
-    }
+      return { article: a, score };
+    });
 
-    return selected;
+    // Sort by score (desc), then by date (desc)
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const da = a.article.publishedAt ? new Date(a.article.publishedAt).getTime() : 0;
+      const db = b.article.publishedAt ? new Date(b.article.publishedAt).getTime() : 0;
+      return db - da;
+    });
+
+    // Filter out completely unrelated ones (score = 0)
+    const withScore = scored.filter(s => s.score > 0);
+
+    const chosen = (withScore.length > 0 ? withScore : scored).slice(0, maxCount);
+
+    console.log("[Search Loader] Relevance scores:", chosen.map(c => ({
+      title: c.article.title,
+      score: c.score,
+      date: c.article.publishedAt,
+    })));
+
+    return chosen.map(c => c.article);
   }
 
   // Create / find containers in the DOM
@@ -192,7 +200,7 @@
     return { summaryContainer, articlesContainer };
   }
 
-  // Render list of the selected 10 articles
+  // Render list of selected articles
   function renderArticlesList(articles, container) {
     container.innerHTML = "";
 
@@ -303,11 +311,7 @@
 
     try {
       const resp = await fetch(apiUrl);
-      console.log(
-        "[Search Loader] Search response:",
-        resp.status,
-        resp.statusText
-      );
+      console.log("[Search Loader] Search response:", resp.status, resp.statusText);
 
       if (!resp.ok) {
         let msg = `Search error: ${resp.status} ${resp.statusText}`;
@@ -323,7 +327,6 @@
       const data = await resp.json();
       console.log("[Search Loader] Raw search data:", data);
 
-      // Accept multiple shapes from the backend
       let rawArticles = [];
 
       if (Array.isArray(data.articles)) {
@@ -331,7 +334,6 @@
       } else if (Array.isArray(data.rawArticles)) {
         rawArticles = data.rawArticles;
       } else if (Array.isArray(data.groupedArticles)) {
-        // Flatten groupedArticles -> articles
         data.groupedArticles.forEach((group) => {
           if (Array.isArray(group.articles)) {
             rawArticles.push(...group.articles);
@@ -349,8 +351,8 @@
         return;
       }
 
-      // Pick up to 10 unique-source articles
-      const selectedArticles = pickTopArticles(rawArticles, 10);
+      // ✅ NEW: choose only the most relevant articles to the query
+      const selectedArticles = selectRelevantArticles(rawArticles, query, 10);
       console.log(
         "[Search Loader] Selected",
         selectedArticles.length,
@@ -386,17 +388,16 @@
         summarizeResp.statusText
       );
 
-      const summarizeData = await summarizeResp.json().catch(async (parseErr) => {
-        console.error(
-          "[Search Loader] Failed to parse summarizer JSON:",
-          parseErr
-        );
-        const text = await summarizeResp.text();
-        console.error("[Search Loader] Raw summarizer response:", text);
-        throw new Error(
-          `Summarizer returned invalid response (${summarizeResp.status})`
-        );
-      });
+      const summarizeData = await summarizeResp
+        .json()
+        .catch(async (parseErr) => {
+          console.error("[Search Loader] Failed to parse summarizer JSON:", parseErr);
+          const text = await summarizeResp.text();
+          console.error("[Search Loader] Raw summarizer response:", text);
+          throw new Error(
+            `Summarizer returned invalid response (${summarizeResp.status})`
+          );
+        });
 
       if (!summarizeResp.ok || summarizeData.error) {
         const msg =
@@ -411,7 +412,9 @@
         summarizeData.summary ||
         "No summary generated.";
 
-      const cleanSummary = String(rawSummary).replace(/<[^>]+>/g, "").trim();
+      const cleanSummary = String(rawSummary)
+        .replace(/<[^>]+>/g, "")
+        .trim();
 
       if (!cleanSummary) {
         renderSummaryError(
