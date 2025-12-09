@@ -506,7 +506,6 @@ const API_BASE = (function () {
     // Show visible loading indicator with spinner
     articlesContainer.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px;">
-        <div style="font-size: 24px; margin-bottom: 20px;">🔍</div>
         <p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Loading search results...</p>
         <p style="color: #666; font-size: 14px;">Searching across all news sources...</p>
         <div style="margin-top: 20px;">
@@ -655,7 +654,6 @@ const API_BASE = (function () {
         });
 
         let errorMessage = '<div style="text-align: center; padding: 40px;">';
-        errorMessage += '<div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>';
         errorMessage += '<p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Error loading search results</p>';
         errorMessage += '<p style="color: #666; margin-bottom: 20px;">Please try again or check your connection.</p>';
         if (error.message) {
