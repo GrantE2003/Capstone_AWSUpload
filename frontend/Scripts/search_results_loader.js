@@ -553,9 +553,22 @@ const API_BASE = (function () {
 
         articlesContainer.innerHTML = '';
 
+        // Check for explicit "no results" flag from backend (for search queries)
+        if (data.noResults === true) {
+          articlesContainer.innerHTML =
+            '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
+          return;
+        }
+
         if (data.groupedArticles && data.groupedArticles.length > 0) {
           // Filter out groups without valid summaries before rendering
           const groupsWithSummaries = data.groupedArticles.filter(group => {
+            // Check if group is marked as title-only summary
+            if (group.isTitleOnlySummary === true) {
+              console.log('[Search Results] Filtering out group - marked as title-only summary');
+              return false;
+            }
+            
             const summary = group.aiSummary || group.summary;
             if (!summary || summary.trim().length < 50) {
               console.log('[Search Results] Filtering out group without valid summary');
@@ -586,9 +599,15 @@ const API_BASE = (function () {
             return sources.join(', ');
           }));
           
-          groupsWithSummaries.forEach(group => {
-            renderStoryGroup(group, articlesContainer);
-          });
+          if (groupsWithSummaries.length === 0) {
+            // All groups were filtered out - show no results message
+            articlesContainer.innerHTML =
+              '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
+          } else {
+            groupsWithSummaries.forEach(group => {
+              renderStoryGroup(group, articlesContainer);
+            });
+          }
 
           // Pagination display removed per user request
         } else if (data.rawArticles && data.rawArticles.length > 0) {
@@ -599,8 +618,9 @@ const API_BASE = (function () {
             renderRawArticle(article, articlesContainer);
           });
         } else {
+          // No results at all
           articlesContainer.innerHTML =
-            '<div class="card"><p style="font-size: 16px; padding: 20px;">No articles found for your search: "<strong>' + query + '</strong>"</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
+            '<div class="card" style="text-align: center; padding: 40px;"><p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">No articles found for this topic.</p><p style="color: #666; font-size: 14px;">Try different keywords or check your spelling.</p></div>';
         }
 
         if (data.warnings && data.warnings.length > 0) {

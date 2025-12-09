@@ -4,6 +4,7 @@ const router = express.Router();
 const { fetchGuardianArticles } = require('../services/guardianClient');
 const { fetchGdeltArticles } = require('../services/gdeltClient');
 const { fetchCurrentsArticles } = require('../services/currentsClient');
+const { fetchMediastackArticles } = require('../services/mediastackClient');
 const { groupSimilarArticles } = require('../services/articleGrouper');
 const { summarizeArticleGroup, generateNeutralTitle } = require('../services/llmSummarizer');
 
@@ -82,11 +83,11 @@ router.get('/aggregate', async (req, res) => {
     const warnings = [];
 
     // Fetch from all sources in parallel
-    console.log('[Aggregate] Fetching from all sources (Guardian, GDELT, Currents)...');
+    console.log('[Aggregate] Fetching from all sources (Guardian, GDELT, Currents, Mediastack)...');
     console.log('[Aggregate] Query:', query || category || 'default');
     console.log('[Aggregate] newsQuery object:', JSON.stringify(newsQuery, null, 2));
 
-    const [guardianResults, gdeltResults, currentsResults] = await Promise.allSettled([
+    const [guardianResults, gdeltResults, currentsResults, mediastackResults] = await Promise.allSettled([
       fetchGuardianArticles(newsQuery).catch(err => {
         console.error('[Aggregate] Guardian API FAILED:', err.message);
         console.error('[Aggregate] Guardian error stack:', err.stack);
@@ -120,6 +121,15 @@ router.get('/aggregate', async (req, res) => {
         }
         warnings.push(`Currents API: ${err.message}`);
         return [];
+      }),
+      fetchMediastackArticles(newsQuery).catch(err => {
+        console.error('[Aggregate] Mediastack API FAILED:', err.message);
+        if (err.response) {
+          console.error('[Aggregate] Mediastack response status:', err.response.status);
+          console.error('[Aggregate] Mediastack response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        warnings.push(`Mediastack API: ${err.message}`);
+        return [];
       })
     ]);
     
@@ -128,6 +138,7 @@ router.get('/aggregate', async (req, res) => {
     console.log('  Guardian status:', guardianResults.status, guardianResults.status === 'rejected' ? guardianResults.reason?.message : '');
     console.log('  GDELT status:', gdeltResults.status, gdeltResults.status === 'rejected' ? gdeltResults.reason?.message : '');
     console.log('  Currents status:', currentsResults.status, currentsResults.status === 'rejected' ? currentsResults.reason?.message : '');
+    console.log('  Mediastack status:', mediastackResults.status, mediastackResults.status === 'rejected' ? mediastackResults.reason?.message : '');
 
     // Extract results (handle Promise.allSettled structure)
     const guardianArticles =
@@ -136,6 +147,8 @@ router.get('/aggregate', async (req, res) => {
       gdeltResults.status === 'fulfilled' ? gdeltResults.value : [];
     const currentsArticles =
       currentsResults.status === 'fulfilled' ? currentsResults.value : [];
+    const mediastackArticles =
+      mediastackResults.status === 'fulfilled' ? mediastackResults.value : [];
 
     // Verify results are arrays
     if (!Array.isArray(guardianArticles)) {
@@ -147,12 +160,16 @@ router.get('/aggregate', async (req, res) => {
     if (!Array.isArray(currentsArticles)) {
       console.warn('[Aggregate] Currents returned non-array:', typeof currentsArticles);
     }
+    if (!Array.isArray(mediastackArticles)) {
+      console.warn('[Aggregate] Mediastack returned non-array:', typeof mediastackArticles);
+    }
 
     // Log results from each source for verification
     console.log('\n[Aggregate] Articles fetched from each source (already normalized):');
     const guardianCount = Array.isArray(guardianArticles) ? guardianArticles.length : 0;
     const gdeltCount = Array.isArray(gdeltArticles) ? gdeltArticles.length : 0;
     const currentsCount = Array.isArray(currentsArticles) ? currentsArticles.length : 0;
+    const mediastackCount = Array.isArray(mediastackArticles) ? mediastackArticles.length : 0;
 
     console.log(
       `   Guardian: ${guardianCount} articles ${guardianCount === 0 ? '(NONE!)' : ''}`
@@ -161,8 +178,11 @@ router.get('/aggregate', async (req, res) => {
     console.log(
       `   Currents: ${currentsCount} articles ${currentsCount === 0 ? '(NONE!)' : ''}`
     );
+    console.log(
+      `   Mediastack: ${mediastackCount} articles ${mediastackCount === 0 ? '(NONE!)' : ''}`
+    );
 
-    const totalArticles = guardianCount + gdeltCount + currentsCount;
+    const totalArticles = guardianCount + gdeltCount + currentsCount + mediastackCount;
     console.log(`   Total: ${totalArticles} articles from all sources\n`);
     
     // Warn if one source is dominating
@@ -202,6 +222,7 @@ router.get('/aggregate', async (req, res) => {
     if (guardianCount > 0) successfulSources.push(`Guardian (${guardianCount})`);
     if (gdeltCount > 0) successfulSources.push(`GDELT (${gdeltCount})`);
     if (currentsCount > 0) successfulSources.push(`Currents (${currentsCount})`);
+    if (mediastackCount > 0) successfulSources.push(`Mediastack (${mediastackCount})`);
     
     if (successfulSources.length > 0) {
       console.log(`[Aggregate] Successfully fetched articles from: ${successfulSources.join(', ')}`);
@@ -219,6 +240,7 @@ router.get('/aggregate', async (req, res) => {
     // GDELT is lowest priority - take fewer articles from it
     const MAX_ARTICLES_GUARDIAN = 30;
     const MAX_ARTICLES_CURRENTS = 30;
+    const MAX_ARTICLES_MEDIASTACK = 30;
     const MAX_ARTICLES_GDELT = 15; // Lower priority - fewer articles
     
     const balancedGuardian = Array.isArray(guardianArticles) 
@@ -230,18 +252,22 @@ router.get('/aggregate', async (req, res) => {
     const balancedCurrents = Array.isArray(currentsArticles) 
       ? currentsArticles.slice(0, MAX_ARTICLES_CURRENTS) 
       : [];
+    const balancedMediastack = Array.isArray(mediastackArticles)
+      ? mediastackArticles.slice(0, MAX_ARTICLES_MEDIASTACK)
+      : [];
 
-    console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}`);
+    console.log(`[Aggregate] Balanced article counts: Guardian: ${balancedGuardian.length}, GDELT: ${balancedGdelt.length}, Currents: ${balancedCurrents.length}, Mediastack: ${balancedMediastack.length}`);
 
     // Combine all normalized articles into ONE pool before grouping
-    // Prioritize Guardian and Currents over GDELT in interleaving
+    // Prioritize Guardian, Currents, and Mediastack over GDELT in interleaving
     const allArticles = [];
-    const maxLength = Math.max(balancedGuardian.length, balancedCurrents.length, balancedGdelt.length);
+    const maxLength = Math.max(balancedGuardian.length, balancedCurrents.length, balancedMediastack.length, balancedGdelt.length);
     
     for (let i = 0; i < maxLength; i++) {
-      // Priority order: Guardian, Currents, then GDELT
+      // Priority order: Guardian, Currents, Mediastack, then GDELT
       if (i < balancedGuardian.length) allArticles.push(balancedGuardian[i]);
       if (i < balancedCurrents.length) allArticles.push(balancedCurrents[i]);
+      if (i < balancedMediastack.length) allArticles.push(balancedMediastack[i]);
       if (i < balancedGdelt.length) allArticles.push(balancedGdelt[i]);
     }
 
@@ -255,6 +281,8 @@ router.get('/aggregate', async (req, res) => {
           ? 'gdelt'
           : article.sourceName === 'Currents'
           ? 'currents'
+          : article.sourceName === 'Mediastack'
+          ? 'mediastack'
           : 'unknown'
     }));
 
@@ -264,30 +292,46 @@ router.get('/aggregate', async (req, res) => {
     const gdeltCountCombined = articlesWithSource.filter(a => a.source === 'gdelt').length;
     const currentsCountCombined = articlesWithSource.filter(a => a.source === 'currents')
       .length;
+    const mediastackCountCombined = articlesWithSource.filter(a => a.source === 'mediastack')
+      .length;
     console.log(`   Guardian: ${guardianCountCombined} articles`);
     console.log(`   GDELT: ${gdeltCountCombined} articles`);
     console.log(`   Currents: ${currentsCountCombined} articles`);
+    console.log(`   Mediastack: ${mediastackCountCombined} articles`);
     console.log(`   Total: ${articlesWithSource.length} articles\n`);
 
     const sourceBreakdown = {
       guardian: guardianCountCombined,
       gdelt: gdeltCountCombined,
-      currents: currentsCountCombined
+      currents: currentsCountCombined,
+      mediastack: mediastackCountCombined
     };
     console.log('[Aggregate] Source verification:', sourceBreakdown);
 
-    const nonGuardianCount = gdeltCountCombined + currentsCountCombined;
+    const nonGuardianCount = gdeltCountCombined + currentsCountCombined + mediastackCountCombined;
     if (nonGuardianCount === 0 && articlesWithSource.length > 0) {
       console.warn(
-        '[Aggregate] WARNING: Only Guardian articles found. GDELT and Currents may not be working.'
+        '[Aggregate] WARNING: Only Guardian articles found. Other sources may not be working.'
       );
     } else {
       console.log(
-        `[Aggregate] Non-Guardian articles: ${nonGuardianCount} (GDELT: ${gdeltCountCombined}, Currents: ${currentsCountCombined})`
+        `[Aggregate] Non-Guardian articles: ${nonGuardianCount} (GDELT: ${gdeltCountCombined}, Currents: ${currentsCountCombined}, Mediastack: ${mediastackCountCombined})`
       );
     }
 
     if (articlesWithSource.length === 0) {
+      // For search queries, return a clear "No articles found" message
+      if (isSearch) {
+        return res.json({
+          query: query || '',
+          country: country || undefined,
+          category: category || undefined,
+          groupedArticles: [],
+          rawArticles: [],
+          warnings: ['No articles found for this topic.'],
+          noResults: true
+        });
+      }
       return res.json({
         query: query || '',
         country: country || undefined,
@@ -433,10 +477,11 @@ router.get('/aggregate', async (req, res) => {
     // Helper to get source priority (lower number = higher priority)
     const getSourcePriority = (group) => {
       const sources = new Set(group.articles.map(a => (a.source || a.sourceName || 'unknown').toLowerCase()));
-      if (sources.has('guardian') && !sources.has('gdelt')) return 1; // Guardian-only or Guardian+Currents
+      if (sources.has('guardian') && !sources.has('gdelt')) return 1; // Guardian-only or Guardian+others
       if (sources.has('currents') && !sources.has('gdelt')) return 2; // Currents-only
-      if (sources.has('gdelt') && !sources.has('guardian') && !sources.has('currents')) return 4; // GDELT-only (lowest)
-      if (sources.has('guardian') || sources.has('currents')) return 3; // Mixed with Guardian/Currents
+      if (sources.has('mediastack') && !sources.has('gdelt')) return 2; // Mediastack-only (same priority as Currents)
+      if (sources.has('gdelt') && !sources.has('guardian') && !sources.has('currents') && !sources.has('mediastack')) return 4; // GDELT-only (lowest)
+      if (sources.has('guardian') || sources.has('currents') || sources.has('mediastack')) return 3; // Mixed with Guardian/Currents/Mediastack
       return 5; // Unknown
     };
 
@@ -503,9 +548,9 @@ router.get('/aggregate', async (req, res) => {
         groupsBySource[source].push(group);
       });
 
-      // Interleave groups from different sources with priority: Guardian > Currents > GDELT
-      // Sort source keys by priority (guardian first, currents second, gdelt last)
-      const sourcePriority = ['guardian', 'currents', 'gdelt'];
+      // Interleave groups from different sources with priority: Guardian > Currents > Mediastack > GDELT
+      // Sort source keys by priority (guardian first, currents second, mediastack third, gdelt last)
+      const sourcePriority = ['guardian', 'currents', 'mediastack', 'gdelt'];
       const sourceKeys = Object.keys(groupsBySource).sort((a, b) => {
         const aPriority = sourcePriority.indexOf(a.toLowerCase());
         const bPriority = sourcePriority.indexOf(b.toLowerCase());
@@ -566,15 +611,16 @@ router.get('/aggregate', async (req, res) => {
     
     // ENSURE SOURCE DIVERSITY: Limit groups from a single source to prevent dominance
     // GDELT has much lower limits since it produces worst summaries
-    // For search, ensure Guardian and Currents are prioritized
-    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.5); // 50% max (increased for search)
-    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.5); // 50% max (increased for search)
+    // For search, ensure Guardian, Currents, and Mediastack are prioritized
+    const MAX_GROUPS_GUARDIAN = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_CURRENTS = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
+    const MAX_GROUPS_MEDIASTACK = Math.ceil(GROUPS_TO_SUMMARIZE * 0.4); // 40% max
     const MAX_GROUPS_GDELT = Math.ceil(GROUPS_TO_SUMMARIZE * 0.15); // 15% max (lowest priority, reduced)
     
     const sourceGroupCounts = {};
     const diversifiedGroups = [];
     
-    // First pass: Add all multi-source groups and Guardian/Currents single-source groups
+    // First pass: Add all multi-source groups and Guardian/Currents/Mediastack single-source groups
     for (const group of groupsToSummarize) {
       const primarySource = (group.articles[0]?.source || group.articles[0]?.sourceName || 'unknown').toLowerCase();
       const sourceCount = getUniqueSourceCount(group);
@@ -593,9 +639,12 @@ router.get('/aggregate', async (req, res) => {
         } else {
           console.log(`[Aggregate] Skipping multi-source group - all GDELT with no valid descriptions`);
         }
-      } else if (primarySource === 'guardian' || primarySource === 'currents') {
-        // Guardian and Currents single-source groups: prioritize these
-        const maxAllowed = primarySource === 'guardian' ? MAX_GROUPS_GUARDIAN : MAX_GROUPS_CURRENTS;
+      } else if (primarySource === 'guardian' || primarySource === 'currents' || primarySource === 'mediastack') {
+        // Guardian, Currents, and Mediastack single-source groups: prioritize these
+        let maxAllowed = MAX_GROUPS_GUARDIAN;
+        if (primarySource === 'currents') maxAllowed = MAX_GROUPS_CURRENTS;
+        if (primarySource === 'mediastack') maxAllowed = MAX_GROUPS_MEDIASTACK;
+        
         const currentCount = sourceGroupCounts[primarySource] || 0;
         if (currentCount < maxAllowed) {
           diversifiedGroups.push(group);
