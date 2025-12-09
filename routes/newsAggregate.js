@@ -194,28 +194,8 @@ router.get('/aggregate', async (req, res) => {
       }
     }
 
-    // Warn if any source returned zero articles and add to warnings
-    if (guardianCount === 0) {
-      const warningMsg = 'Guardian returned 0 articles - check API key and query';
-      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
-      if (!warnings.some(w => w.includes('Guardian'))) {
-        warnings.push(warningMsg);
-      }
-    }
-    if (gdeltCount === 0) {
-      const warningMsg = 'GDELT returned 0 articles - check API endpoint and query';
-      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
-      if (!warnings.some(w => w.includes('GDELT'))) {
-        warnings.push(warningMsg);
-      }
-    }
-    if (currentsCount === 0) {
-      const warningMsg = 'Currents returned 0 articles - check API key and query';
-      console.warn(`[Aggregate] WARNING: ${warningMsg}`);
-      if (!warnings.some(w => w.includes('Currents'))) {
-        warnings.push(warningMsg);
-      }
-    }
+    // Note: We don't warn about sources returning 0 articles as this is normal behavior
+    // Some sources may not have articles for every query, and that's okay
     
     // Log which sources succeeded
     const successfulSources = [];
