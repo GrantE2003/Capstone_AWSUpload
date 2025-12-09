@@ -700,17 +700,13 @@ function filterArticlesByCountry(articles, countryCode, section, includeInternat
   return filtered;
 }
 
-// =====================================================================
-// 1) SIMPLE SEARCH ENDPOINT FOR search_results_loader.js
-//    GET /api/search?q=...&country=US
-// =====================================================================
+// SIMPLE SEARCH ENDPOINT USED BY search_results_loader.js
 app.get('/api/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     const limit = Number(req.query.limit) || 30;
-    const country = req.query.country || '';
 
-    console.log('[Search] Request:', { q, country, limit });
+    console.log('[Search] Request:', { q, limit });
 
     if (!q) {
       return res.status(400).json({ error: 'Missing search query (?q=...)' });
@@ -732,21 +728,14 @@ app.get('/api/search', async (req, res) => {
       return res.json({ articles });
     }
 
-    // Build Guardian params
+    // --- REAL GUARDIAN CALL, NO COUNTRY FILTERING ---
     const params = {
       'api-key': GUARDIAN_API_KEY,
       'show-fields': 'trailText,bodyText',
       'page-size': Math.min(limit, 50),
-      'order-by': 'newest'
+      'order-by': 'newest',
+      q // just use the raw search text
     };
-
-    let searchQuery = q;
-    // Optional: apply country in text query, but we do NOT filter aggressively here
-    if (country) {
-      searchQuery = buildQueryWithCountry(searchQuery, country);
-      console.log('[Search] Query with country:', searchQuery);
-    }
-    params.q = searchQuery;
 
     console.log('[Search] Guardian call:', {
       url: `${GUARDIAN_BASE_URL}/search`,
@@ -782,6 +771,7 @@ app.get('/api/search', async (req, res) => {
     });
   }
 });
+
 
 // =====================================================================
 // 2) AGGREGATE ENDPOINT FOR CATEGORY PAGES
