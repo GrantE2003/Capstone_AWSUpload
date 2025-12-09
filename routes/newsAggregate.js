@@ -84,12 +84,18 @@ router.get('/aggregate', async (req, res) => {
     // Fetch from all sources in parallel
     console.log('[Aggregate] Fetching from all sources (Guardian, GDELT, Currents)...');
     console.log('[Aggregate] Query:', query || category || 'default');
+    console.log('[Aggregate] newsQuery object:', JSON.stringify(newsQuery, null, 2));
 
     const [guardianResults, gdeltResults, currentsResults] = await Promise.allSettled([
       fetchGuardianArticles(newsQuery).catch(err => {
         console.error('[Aggregate] Guardian API FAILED:', err.message);
+        console.error('[Aggregate] Guardian error stack:', err.stack);
         if (err.response) {
           console.error('[Aggregate] Guardian response status:', err.response.status);
+          console.error('[Aggregate] Guardian response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        if (err.request) {
+          console.error('[Aggregate] Guardian request made but no response received');
         }
         warnings.push(`Guardian API: ${err.message}`);
         return [];
@@ -104,13 +110,24 @@ router.get('/aggregate', async (req, res) => {
       }),
       fetchCurrentsArticles(newsQuery).catch(err => {
         console.error('[Aggregate] Currents API FAILED:', err.message);
+        console.error('[Aggregate] Currents error stack:', err.stack);
         if (err.response) {
           console.error('[Aggregate] Currents response status:', err.response.status);
+          console.error('[Aggregate] Currents response data:', JSON.stringify(err.response.data, null, 2));
+        }
+        if (err.request) {
+          console.error('[Aggregate] Currents request made but no response received');
         }
         warnings.push(`Currents API: ${err.message}`);
         return [];
       })
     ]);
+    
+    // Log Promise.allSettled results
+    console.log('[Aggregate] Promise.allSettled results:');
+    console.log('  Guardian status:', guardianResults.status, guardianResults.status === 'rejected' ? guardianResults.reason?.message : '');
+    console.log('  GDELT status:', gdeltResults.status, gdeltResults.status === 'rejected' ? gdeltResults.reason?.message : '');
+    console.log('  Currents status:', currentsResults.status, currentsResults.status === 'rejected' ? currentsResults.reason?.message : '');
 
     // Extract results (handle Promise.allSettled structure)
     const guardianArticles =

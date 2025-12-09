@@ -13,6 +13,8 @@ const GUARDIAN_BASE_URL = 'https://content.guardianapis.com';
  */
 async function fetchGuardianArticles({ query, country, category }) {
   try {
+    console.log('[Guardian] fetchGuardianArticles called with:', { query, country, category });
+    
     if (!GUARDIAN_API_KEY) {
       console.warn('[Guardian] No API key provided, returning empty array');
       return [];
@@ -29,6 +31,14 @@ async function fetchGuardianArticles({ query, country, category }) {
     // Determine if this is a search query or category request
     const hasSearchQuery = query && query.trim().length > 0;
     const hasCategory = category && category.trim().length > 0;
+    
+    console.log('[Guardian] Query check:', { 
+      query, 
+      hasSearchQuery, 
+      hasCategory,
+      queryType: typeof query,
+      queryLength: query ? query.length : 0
+    });
 
     let searchQuery = null; // Initialize for logging
 
@@ -84,13 +94,22 @@ async function fetchGuardianArticles({ query, country, category }) {
       country: country || 'none'
     });
 
+    console.log('[Guardian] Making API request to:', `${GUARDIAN_BASE_URL}/search`);
+    console.log('[Guardian] Request params (excluding api-key):', { ...params, 'api-key': '[REDACTED]' });
+    
     const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params, timeout: 15000 });
     
+    console.log('[Guardian] API response status:', response.data.response?.status);
+    console.log('[Guardian] API response total:', response.data.response?.total);
+    
     if (response.data.response.status !== 'ok') {
-      throw new Error(`Guardian API error: ${response.data.response.message}`);
+      const errorMsg = `Guardian API error: ${response.data.response.message}`;
+      console.error('[Guardian]', errorMsg);
+      throw new Error(errorMsg);
     }
 
     const rawArticles = response.data.response.results || [];
+    console.log('[Guardian] Raw articles received:', rawArticles.length);
     
     // Normalize Guardian articles to consistent format
     const normalizedArticles = rawArticles

@@ -14,6 +14,8 @@ const CURRENTS_BASE_URL = 'https://api.currentsapi.services/v1';
  */
 async function fetchCurrentsArticles({ query, country, category }) {
   try {
+    console.log('[Currents] fetchCurrentsArticles called with:', { query, country, category });
+    
     if (!CURRENTS_API_KEY) {
       console.warn('[Currents] No API key provided, returning empty array');
       console.log('Currents returned 0 results');
@@ -29,6 +31,14 @@ async function fetchCurrentsArticles({ query, country, category }) {
     // Determine if this is a search query or category request
     const hasSearchQuery = query && query.trim().length > 0;
     const hasCategory = category && category.trim().length > 0;
+    
+    console.log('[Currents] Query check:', { 
+      query, 
+      hasSearchQuery, 
+      hasCategory,
+      queryType: typeof query,
+      queryLength: query ? query.length : 0
+    });
 
     let endpoint = '';
     
@@ -82,18 +92,27 @@ async function fetchCurrentsArticles({ query, country, category }) {
       params.category = currentsCategory;
     }
     
+    console.log('[Currents] Making API request to:', endpoint);
+    console.log('[Currents] Request params (excluding apiKey):', { ...params, apiKey: '[REDACTED]' });
+    
     const response = await axios.get(endpoint, { 
       params,
       timeout: 15000
     });
 
+    console.log('[Currents] API response status:', response.data?.status);
+    console.log('[Currents] API response news count:', response.data?.news?.length || 0);
+
     // Currents API response structure: { status: 'ok', news: [...] }
     if (response.data.status && response.data.status !== 'ok') {
-      throw new Error(`Currents API error: ${response.data.message || 'Unknown error'}`);
+      const errorMsg = `Currents API error: ${response.data.message || 'Unknown error'}`;
+      console.error('[Currents]', errorMsg);
+      throw new Error(errorMsg);
     }
 
     // Currents API returns articles in news array
     const rawArticles = response.data?.news || [];
+    console.log('[Currents] Raw articles received:', rawArticles.length);
     
     // If no articles in news, check for data array (some endpoints use this)
     const articlesToProcess = rawArticles.length > 0 ? rawArticles : (response.data?.data || []);
