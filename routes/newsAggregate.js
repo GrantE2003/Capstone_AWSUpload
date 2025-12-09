@@ -278,8 +278,9 @@ router.get('/aggregate', async (req, res) => {
     }
 
     // Group similar articles ACROSS ALL SOURCES
-    // Lower threshold to improve cross-source grouping - articles about same story should group
-    const similarityThreshold = 0.25; // Lowered from 0.35 to group more similar articles
+    // Use lower threshold for search queries to group articles with similar titles more aggressively
+    // For search, we want to group articles about the same topic even if they have slightly different wording
+    const similarityThreshold = isSearch ? 0.15 : 0.25; // More aggressive grouping for search queries
     const groups = groupSimilarArticles(articlesWithSource, similarityThreshold);
     
     // CRITICAL: Ensure grouping actually happened

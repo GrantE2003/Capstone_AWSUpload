@@ -779,16 +779,18 @@ app.get('/api/guardian', async (req, res) => {
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 1. Your summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
-2. Do NOT include the article title anywhere in your summary
-3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
-4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
-5. Do NOT include phrases like "According to [source]" or "From [source]"
-6. Do NOT include any metadata, formatting markers, or attribution
-7. Write in engaging, clear, information-dense prose that stands alone without any source attribution or title references
-8. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
-9. Be thorough, detailed, and information-rich - readers should feel fully informed
+2. ABSOLUTELY DO NOT include article titles anywhere in your summary - not at the beginning, not at the end, not anywhere
+3. DO NOT repeat or paraphrase the article title - the title is already shown separately, your job is to provide NEW information
+4. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
+5. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
+6. Do NOT include phrases like "According to [source]" or "From [source]"
+7. Do NOT include any metadata, formatting markers, or attribution
+8. Write in engaging, clear, information-dense prose that stands alone without any source attribution or title references
+9. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
+10. Be thorough, detailed, and information-rich - readers should feel fully informed
+11. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
 
-Start your summary directly with the story content. Do not preface it with the title or source.
+Start your summary directly with the story content. Do not preface it with the title or source. NEVER repeat the title.
 
 Article Content:\n${text}`
             }

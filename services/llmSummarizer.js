@@ -61,17 +61,19 @@ Return ONLY valid JSON with this exact shape:
 
 CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
 1. The summary must contain ONLY the synthesized description of the news story - be extremely thorough and information-dense
-2. Do NOT include article titles anywhere in the summary
-3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
-4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
-5. Do NOT include phrases like "According to [source]" or "From [source]"
-6. Do NOT include any metadata, formatting markers, or attribution
-7. Write in clear, engaging, information-dense prose that makes readers feel fully informed
-8. Start the summary directly with the story content - do not preface with title or source
-9. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
-10. Synthesize information from ALL sources to provide the most complete picture possible
+2. ABSOLUTELY DO NOT include article titles anywhere in the summary - not at the beginning, not at the end, not anywhere
+3. DO NOT repeat or paraphrase the article title - the title is already shown separately, your job is to provide NEW information
+4. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
+5. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
+6. Do NOT include phrases like "According to [source]" or "From [source]"
+7. Do NOT include any metadata, formatting markers, or attribution
+8. Write in clear, engaging, information-dense prose that makes readers feel fully informed
+9. Start the summary directly with the story content - do not preface with title or source
+10. Prioritize concrete facts, specific details, numbers, names, dates, and locations over general statements
+11. Synthesize information from ALL sources to provide the most complete picture possible
+12. If multiple articles have similar titles, synthesize their content into ONE comprehensive summary - do not just repeat the title
 
-The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich."
+The summary should provide complete, comprehensive understanding of the story without any source attribution or title references. Be thorough, detailed, and information-rich. NEVER repeat the title."
 }`;
 
     let apiResponse;

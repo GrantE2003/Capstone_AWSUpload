@@ -149,7 +149,8 @@ function calculateSimilarity(article1, article2) {
     const titleSimilarity = jaccardSimilarity(titleTerms1, titleTerms2);
 
     // CRITICAL: Title similarity is the PRIMARY signal for grouping
-    if (titleSimilarity > 0.2) {
+    // Lower threshold to catch more similar titles
+    if (titleSimilarity > 0.15) {
       // Weight title similarity very heavily (95%) since it's the strongest signal
       textSimilarity = Math.max(
         textSimilarity,
@@ -158,11 +159,17 @@ function calculateSimilarity(article1, article2) {
     }
 
     // Additional boost: check for shared important words in titles
+    // Lower threshold to catch more matches (2 words instead of 3)
     const title1Words = new Set(title1.split(/\s+/).filter((w) => w.length > 3));
     const title2Words = new Set(title2.split(/\s+/).filter((w) => w.length > 3));
     const sharedTitleWords = [...title1Words].filter((w) => title2Words.has(w));
-    if (sharedTitleWords.length >= 3) {
-      textSimilarity = Math.min(1, textSimilarity + 0.1);
+    if (sharedTitleWords.length >= 2) { // Lowered from 3 to 2
+      textSimilarity = Math.min(1, textSimilarity + 0.15); // Increased boost from 0.1 to 0.15
+    }
+    
+    // Extra boost for very similar titles (high word overlap)
+    if (sharedTitleWords.length >= 4) {
+      textSimilarity = Math.min(1, textSimilarity + 0.2);
     }
   }
 

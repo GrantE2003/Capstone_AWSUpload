@@ -541,14 +541,7 @@ const API_BASE = (function () {
             renderStoryGroup(group, articlesContainer);
           });
 
-          if (data.pagination && data.pagination.totalPages > 1) {
-            const paginationDiv = document.createElement('div');
-            paginationDiv.className = 'pagination';
-            paginationDiv.innerHTML = `
-              <p>Page ${data.pagination.currentPage} of ${data.pagination.totalPages}</p>
-            `;
-            articlesContainer.appendChild(paginationDiv);
-          }
+          // Pagination display removed per user request
         } else if (data.rawArticles && data.rawArticles.length > 0) {
           // Fallback: show raw articles if no groups were created
           console.log('[Search Results] No groups found, displaying', data.rawArticles.length, 'raw articles');
