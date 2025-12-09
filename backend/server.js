@@ -6,7 +6,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middleware
+// ============================
+// Basic middleware
+// ============================
 app.use(cors());
 app.use(express.json());
 
@@ -28,17 +30,19 @@ app.get('/', (req, res) => {
   res.sendFile('Pages/index.html', { root: '../frontend' });
 });
 
-// Guardian API configuration
+// ============================
+// Guardian / LLM config
+// ============================
 const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY;
 const GUARDIAN_BASE_URL = 'https://content.guardianapis.com';
-const MOCK_MODE = !GUARDIAN_API_KEY;
+const MOCK_MODE = !GUARDIAN_API_KEY; // true if no key
 
-// OpenRouter configuration
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const LLM_API_URL = process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+const LLM_API_URL =
+  process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 
-// Mock data for when no API key is provided (used by aggregate endpoint)
+// Mock data (used only when no Guardian key)
 const mockData = {
   articles: [
     {
@@ -60,7 +64,9 @@ const mockData = {
   ]
 };
 
-// Country code to country name mapping
+// ============================
+// Country helpers
+// ============================
 const COUNTRY_NAMES = {
   US: 'United States',
   GB: 'United Kingdom',
@@ -156,9 +162,9 @@ function buildQueryWithCountry(originalQuery, countryCode) {
   return countryTerms;
 }
 
-/**
- * Determine if an article matches a specific country
- */
+// ---------------------------------------------------------------------
+// Country relevance helpers (used by /api/news/aggregate only)
+// ---------------------------------------------------------------------
 function articleMatchesCountry(article, targetCountryCode, section) {
   const targetCountryName = getCountryName(targetCountryCode);
   if (!targetCountryName) {
@@ -171,109 +177,290 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   const sectionName = (article.sectionName || '').toLowerCase();
   const sectionId = (article.sectionId || '').toLowerCase();
   const tags = (article.tags || [])
-    .map(tag => (typeof tag === 'string' ? tag.toLowerCase() : (tag.webTitle || tag.id || '').toLowerCase()))
+    .map(tag =>
+      typeof tag === 'string'
+        ? tag.toLowerCase()
+        : (tag.webTitle || tag.id || '').toLowerCase()
+    )
     .filter(Boolean);
 
-  const allText = `${title} ${trailText} ${bodyText} ${sectionName} ${tags.join(' ')}`.toLowerCase();
+  const allText = `${title} ${trailText} ${bodyText} ${sectionName} ${tags.join(
+    ' '
+  )}`.toLowerCase();
 
   const countryIndicators = {
     US: {
       sports: {
         positive: [
-          'united states', 'usa', 'us ', 'american', 'america',
-          'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ncaa', 'college football',
-          'super bowl', 'world series', 'stanley cup', 'nba finals', 'march madness',
-          'nfl playoffs', 'nba playoffs', 'mlb playoffs', 'nhl playoffs',
-          'dodgers', 'yankees', 'lakers', 'warriors', 'cowboys', 'patriots'
+          'united states',
+          'usa',
+          'us ',
+          'american',
+          'america',
+          'nfl',
+          'nba',
+          'mlb',
+          'nhl',
+          'mls',
+          'ncaa',
+          'college football',
+          'super bowl',
+          'world series',
+          'stanley cup',
+          'nba finals',
+          'march madness',
+          'nfl playoffs',
+          'nba playoffs',
+          'mlb playoffs',
+          'nhl playoffs',
+          'dodgers',
+          'yankees',
+          'lakers',
+          'warriors',
+          'cowboys',
+          'patriots'
         ],
         negative: [
-          'premier league', 'english', 'england', 'uk', 'british', 'britain',
-          'efl', 'championship', 'fa cup', 'scotland', 'wales', 'celtic', 'rangers',
-          'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'west ham',
-          'newcastle', 'brighton'
+          'premier league',
+          'english',
+          'england',
+          'uk',
+          'british',
+          'britain',
+          'efl',
+          'championship',
+          'fa cup',
+          'scotland',
+          'wales',
+          'celtic',
+          'rangers',
+          'manchester',
+          'liverpool',
+          'chelsea',
+          'arsenal',
+          'tottenham',
+          'west ham',
+          'newcastle',
+          'brighton'
         ]
       },
       politics: {
         positive: [
-          'united states', 'usa', 'us ', 'american', 'america',
-          'congress', 'senate', 'house of representatives', 'white house',
-          'supreme court', 'washington dc', 'capitol hill', 'president', 'senator',
-          'representative', 'democrat', 'republican', 'biden', 'trump',
-          'federal', 'us government', 'us politics'
+          'united states',
+          'usa',
+          'us ',
+          'american',
+          'america',
+          'congress',
+          'senate',
+          'house of representatives',
+          'white house',
+          'supreme court',
+          'washington dc',
+          'capitol hill',
+          'president',
+          'senator',
+          'representative',
+          'democrat',
+          'republican',
+          'biden',
+          'trump',
+          'federal',
+          'us government',
+          'us politics'
         ],
         negative: [
-          'westminster', 'number 10', 'downing street', 'uk parliament',
-          'british parliament', 'house of commons', 'house of lords', 'prime minister',
-          'mp ', 'mps', 'tory', 'labour party', 'scottish parliament', 'welsh assembly'
+          'westminster',
+          'number 10',
+          'downing street',
+          'uk parliament',
+          'british parliament',
+          'house of commons',
+          'house of lords',
+          'prime minister',
+          'mp ',
+          'mps',
+          'tory',
+          'labour party',
+          'scottish parliament',
+          'welsh assembly'
         ]
       },
       business: {
         positive: [
-          'united states', 'usa', 'us ', 'american', 'america',
-          'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed',
-          'us economy', 'us market', 'wall street', 'us dollar', 'us companies',
-          'us business', 'us trade'
+          'united states',
+          'usa',
+          'us ',
+          'american',
+          'america',
+          'nyse',
+          'nasdaq',
+          'dow jones',
+          's&p 500',
+          'federal reserve',
+          'fed',
+          'us economy',
+          'us market',
+          'wall street',
+          'us dollar',
+          'us companies',
+          'us business',
+          'us trade'
         ],
         negative: [
-          'ftse', 'london stock exchange', 'uk economy', 'uk market',
-          'pound sterling', 'bank of england', 'uk companies', 'uk business'
+          'ftse',
+          'london stock exchange',
+          'uk economy',
+          'uk market',
+          'pound sterling',
+          'bank of england',
+          'uk companies',
+          'uk business'
         ]
       },
       positive: ['united states', 'usa', 'us ', 'american', 'america'],
       negative: [
-        'premier league', 'english', 'england', 'uk', 'british', 'britain',
-        'westminster', 'number 10', 'uk parliament', 'ftse', 'london stock exchange'
+        'premier league',
+        'english',
+        'england',
+        'uk',
+        'british',
+        'britain',
+        'westminster',
+        'number 10',
+        'uk parliament',
+        'ftse',
+        'london stock exchange'
       ]
     },
     GB: {
       sports: {
         positive: [
-          'united kingdom', 'uk', 'britain', 'british', 'england', 'english',
-          'scotland', 'scottish', 'wales', 'welsh', 'premier league', 'efl',
-          'championship', 'fa cup', 'celtic', 'rangers', 'manchester', 'liverpool',
-          'chelsea', 'arsenal', 'tottenham', 'west ham', 'newcastle', 'brighton'
+          'united kingdom',
+          'uk',
+          'britain',
+          'british',
+          'england',
+          'english',
+          'scotland',
+          'scottish',
+          'wales',
+          'welsh',
+          'premier league',
+          'efl',
+          'championship',
+          'fa cup',
+          'celtic',
+          'rangers',
+          'manchester',
+          'liverpool',
+          'chelsea',
+          'arsenal',
+          'tottenham',
+          'west ham',
+          'newcastle',
+          'brighton'
         ],
         negative: [
-          'nfl', 'nba', 'mlb', 'nhl', 'american football', 'super bowl',
-          'world series', 'stanley cup', 'nba finals'
+          'nfl',
+          'nba',
+          'mlb',
+          'nhl',
+          'american football',
+          'super bowl',
+          'world series',
+          'stanley cup',
+          'nba finals'
         ]
       },
       politics: {
         positive: [
-          'united kingdom', 'uk', 'britain', 'british', 'england', 'english',
-          'westminster', 'number 10', 'downing street', 'uk parliament',
-          'british parliament', 'house of commons', 'house of lords',
-          'prime minister', 'mp ', 'mps', 'tory', 'labour party',
-          'scottish parliament', 'welsh assembly'
+          'united kingdom',
+          'uk',
+          'britain',
+          'british',
+          'england',
+          'english',
+          'westminster',
+          'number 10',
+          'downing street',
+          'uk parliament',
+          'british parliament',
+          'house of commons',
+          'house of lords',
+          'prime minister',
+          'mp ',
+          'mps',
+          'tory',
+          'labour party',
+          'scottish parliament',
+          'welsh assembly'
         ],
         negative: [
-          'congress', 'senate', 'house of representatives', 'white house',
-          'supreme court', 'washington dc', 'capitol hill', 'president',
-          'senator', 'representative'
+          'congress',
+          'senate',
+          'house of representatives',
+          'white house',
+          'supreme court',
+          'washington dc',
+          'capitol hill',
+          'president',
+          'senator',
+          'representative'
         ]
       },
       business: {
         positive: [
-          'united kingdom', 'uk', 'britain', 'british', 'ftse',
-          'london stock exchange', 'uk economy', 'uk market', 'pound sterling',
-          'bank of england', 'uk companies', 'uk business'
+          'united kingdom',
+          'uk',
+          'britain',
+          'british',
+          'ftse',
+          'london stock exchange',
+          'uk economy',
+          'uk market',
+          'pound sterling',
+          'bank of england',
+          'uk companies',
+          'uk business'
         ],
         negative: [
-          'nyse', 'nasdaq', 'dow jones', 's&p 500', 'federal reserve', 'fed',
-          'us economy', 'us market', 'wall street'
+          'nyse',
+          'nasdaq',
+          'dow jones',
+          's&p 500',
+          'federal reserve',
+          'fed',
+          'us economy',
+          'us market',
+          'wall street'
         ]
       },
       positive: ['united kingdom', 'uk', 'britain', 'british', 'england', 'english'],
       negative: [
-        'nfl', 'nba', 'mlb', 'nhl', 'congress', 'senate', 'white house',
-        'nyse', 'nasdaq'
+        'nfl',
+        'nba',
+        'mlb',
+        'nhl',
+        'congress',
+        'senate',
+        'white house',
+        'nyse',
+        'nasdaq'
       ]
     },
     CA: {
       sports: {
         positive: [
-          'canada', 'canadian', 'cfl', 'maple leafs', 'blue jays', 'raptors',
-          'canucks', 'flames', 'oilers'
+          'canada',
+          'canadian',
+          'cfl',
+          'maple leafs',
+          'blue jays',
+          'raptors',
+          'canucks',
+          'flames',
+          'oilers'
         ],
         negative: ['premier league', 'nfl', 'nba', 'mlb']
       },
@@ -357,11 +544,19 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   });
 
   const sectionNameLower = sectionName.toLowerCase();
-  if (sectionNameLower.includes('us') || sectionNameLower.includes('usa') || sectionNameLower.includes('united states')) {
+  if (
+    sectionNameLower.includes('us') ||
+    sectionNameLower.includes('usa') ||
+    sectionNameLower.includes('united states')
+  ) {
     if (targetCountryCode === 'US') positiveCount++;
     else negativeCount++;
   }
-  if (sectionNameLower.includes('uk') || sectionNameLower.includes('britain') || sectionNameLower.includes('united kingdom')) {
+  if (
+    sectionNameLower.includes('uk') ||
+    sectionNameLower.includes('britain') ||
+    sectionNameLower.includes('united kingdom')
+  ) {
     if (targetCountryCode === 'GB') positiveCount++;
     else negativeCount++;
   }
@@ -375,7 +570,10 @@ function articleMatchesCountry(article, targetCountryCode, section) {
       };
     }
     if (positiveCount === 0 && negativeCount === 0) {
-      const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
+      const genericCountryTerms = [
+        targetCountryName.toLowerCase(),
+        targetCountryCode.toLowerCase()
+      ];
       const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
       if (hasGenericTerm) {
         return {
@@ -409,7 +607,10 @@ function articleMatchesCountry(article, targetCountryCode, section) {
         };
       }
       if (positiveCount === 0 && negativeCount === 0) {
-        const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
+        const genericCountryTerms = [
+          targetCountryName.toLowerCase(),
+          targetCountryCode.toLowerCase()
+        ];
         const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
         if (hasGenericTerm) {
           return {
@@ -443,7 +644,10 @@ function articleMatchesCountry(article, targetCountryCode, section) {
     }
 
     if (!isStrictCategory) {
-      const genericCountryTerms = [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()];
+      const genericCountryTerms = [
+        targetCountryName.toLowerCase(),
+        targetCountryCode.toLowerCase()
+      ];
       const hasGenericTerm = genericCountryTerms.some(term => allText.includes(term));
       if (hasGenericTerm) {
         return {
@@ -469,9 +673,6 @@ function articleMatchesCountry(article, targetCountryCode, section) {
   };
 }
 
-/**
- * Central country filter
- */
 function filterArticlesByCountry(articles, countryCode, section, includeInternational = false) {
   if (!countryCode) {
     return articles;
@@ -499,11 +700,93 @@ function filterArticlesByCountry(articles, countryCode, section, includeInternat
   return filtered;
 }
 
-/**
- * Aggregate endpoint for grouped stories
- * Supports: category, query, q, country, page, limit
- * Returns: { groupedArticles, rawArticles, warnings, pagination, mockMode, fallbackMode }
- */
+// =====================================================================
+// 1) SIMPLE SEARCH ENDPOINT FOR search_results_loader.js
+//    GET /api/search?q=...&country=US
+// =====================================================================
+app.get('/api/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    const limit = Number(req.query.limit) || 30;
+    const country = req.query.country || '';
+
+    console.log('[Search] Request:', { q, country, limit });
+
+    if (!q) {
+      return res.status(400).json({ error: 'Missing search query (?q=...)' });
+    }
+
+    // Mock mode – just filter mock articles by title
+    if (MOCK_MODE) {
+      console.warn('[Search] MOCK_MODE enabled – using mock articles only');
+      const filtered = mockData.articles.filter(a =>
+        a.title.toLowerCase().includes(q.toLowerCase())
+      );
+      const articles = filtered.slice(0, limit).map(a => ({
+        title: a.title,
+        description: '',
+        url: a.url,
+        publishedAt: a.publishedAt,
+        sourceName: 'Mock'
+      }));
+      return res.json({ articles });
+    }
+
+    // Build Guardian params
+    const params = {
+      'api-key': GUARDIAN_API_KEY,
+      'show-fields': 'trailText,bodyText',
+      'page-size': Math.min(limit, 50),
+      'order-by': 'newest'
+    };
+
+    let searchQuery = q;
+    // Optional: apply country in text query, but we do NOT filter aggressively here
+    if (country) {
+      searchQuery = buildQueryWithCountry(searchQuery, country);
+      console.log('[Search] Query with country:', searchQuery);
+    }
+    params.q = searchQuery;
+
+    console.log('[Search] Guardian call:', {
+      url: `${GUARDIAN_BASE_URL}/search`,
+      params
+    });
+
+    const response = await axios.get(`${GUARDIAN_BASE_URL}/search`, { params });
+
+    if (response.data.response.status !== 'ok') {
+      throw new Error(`Guardian API error: ${response.data.response.message}`);
+    }
+
+    const results = response.data.response.results || [];
+    console.log('[Search] Guardian returned', results.length, 'articles');
+
+    const articles = results.slice(0, limit).map(a => ({
+      title: a.webTitle,
+      description: a.fields?.trailText || '',
+      url: a.webUrl,
+      publishedAt: a.webPublicationDate,
+      sourceName: 'The Guardian'
+    }));
+
+    return res.json({ articles });
+  } catch (err) {
+    console.error('[Search] ERROR:', err.message);
+    if (err.response) {
+      console.error('  Status:', err.response.status);
+      console.error('  Data:', JSON.stringify(err.response.data, null, 2));
+    }
+    res.status(500).json({
+      error: err.message || 'Internal server error'
+    });
+  }
+});
+
+// =====================================================================
+// 2) AGGREGATE ENDPOINT FOR CATEGORY PAGES
+//    GET /api/news/aggregate?... (unchanged from your version)
+// =====================================================================
 app.get('/api/news/aggregate', async (req, res) => {
   try {
     const { category, country, page = 1, limit = 18, query, q } = req.query;
@@ -519,7 +802,6 @@ app.get('/api/news/aggregate', async (req, res) => {
       query: query || q || ''
     });
 
-    // Mock mode (no Guardian key configured)
     if (MOCK_MODE) {
       const articles = mockData.articles.slice(0, numericLimit);
       const grouped = articles.map((a, idx) => ({
@@ -552,7 +834,6 @@ app.get('/api/news/aggregate', async (req, res) => {
       });
     }
 
-    // Build Guardian API params
     const params = {
       'api-key': GUARDIAN_API_KEY,
       'show-fields': 'trailText,bodyText',
@@ -603,13 +884,19 @@ app.get('/api/news/aggregate', async (req, res) => {
 
     if (country) {
       console.log(
-        `[AGGREGATE] Applying country filter: country=${country}, category=${category || 'none'}, includeInternational=${includeInternational}`
+        `[AGGREGATE] Applying country filter: country=${country}, category=${
+          category || 'none'
+        }, includeInternational=${includeInternational}`
       );
-      articles = filterArticlesByCountry(articles, country, category || '', includeInternational);
+      articles = filterArticlesByCountry(
+        articles,
+        country,
+        category || '',
+        includeInternational
+      );
       console.log(`[AGGREGATE] Filtered from ${originalCount} to ${articles.length} articles`);
     }
 
-    // Limit final articles for grouping
     articles = articles.slice(0, numericLimit);
 
     function buildSummaryFromArticle(a) {
@@ -682,7 +969,10 @@ app.get('/api/news/aggregate', async (req, res) => {
   }
 });
 
-// AI Summarization endpoint
+// =====================================================================
+// 3) SINGLE-ARTICLE SUMMARIZER (used by article_loader.js)
+//    POST /api/summarize
+// =====================================================================
 app.post('/api/summarize', async (req, res) => {
   try {
     const { text, title } = req.body;
@@ -691,17 +981,15 @@ app.post('/api/summarize', async (req, res) => {
     console.log('[Summarize] Received summarize request');
     console.log('[Summarize] Title:', title);
     console.log('[Summarize] Text length:', text ? text.length : 0);
-    console.log('[Summarize] Text preview:', text ? text.substring(0, 200) + '...' : 'NO TEXT');
 
     if (!text || !title) {
       console.error('[Summarize] Missing required fields - text:', !!text, 'title:', !!title);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Text and title are required',
         aiSummary: 'Error: Missing required article information.'
       });
     }
 
-    // Fallback summary if no OpenRouter key configured
     if (!OPENROUTER_API_KEY) {
       console.warn('[Summarize] No OpenRouter API key - using fallback summary');
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
@@ -709,24 +997,23 @@ app.post('/api/summarize', async (req, res) => {
       const fallbackSummary = keySentences.join('. ').trim() + '.';
 
       return res.json({
-        aiSummary: fallbackSummary || 'Summary not available. Please read the full article for details.'
+        aiSummary:
+          fallbackSummary ||
+          'Summary not available. Please read the full article for details.'
       });
     }
 
     console.log('[Summarize] Calling OpenRouter API:', LLM_API_URL);
     console.log('[Summarize] Using model:', LLM_MODEL);
 
-    // For OpenRouter, add provider prefix if not already present (e.g., "openai/gpt-4o-mini")
     let modelToUse = LLM_MODEL;
     if (!modelToUse.includes('/')) {
-      // If model doesn't have provider prefix, add "openai/" prefix
       modelToUse = `openai/${modelToUse}`;
       console.log('[Summarize] Added provider prefix to model:', modelToUse);
     }
 
-    // Prepare headers for OpenRouter
     const headers = {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:4000',
       'X-Title': 'News Summarizer'
@@ -740,126 +1027,51 @@ app.post('/api/summarize', async (req, res) => {
           {
             role: 'system',
             content:
-              'You are an expert news analyst and summarizer. Create highly detailed, comprehensive summaries that provide maximum value to readers. Your summaries should be information-dense, covering all critical aspects: key players and their roles, specific facts and figures, timeline of events, background context, implications, quotes from important sources, locations, dates, and why this story matters. Write in clear, engaging prose that makes readers feel fully informed without needing to read the full article.'
+              'You are an expert news analyst and summarizer. Create highly detailed, comprehensive summaries that provide maximum value to readers.'
           },
-            {
-              role: 'user',
-              content: `You are summarizing news articles. Create a highly detailed, comprehensive summary that provides maximum information value. Your summary should be 6-10 sentences and include:
-
-- WHO: All key people, organizations, and entities involved with their specific roles
-- WHAT: The main event, action, or development with specific details
-- WHEN: Exact dates, times, and timeline of events
-- WHERE: Specific locations, regions, or places mentioned
-- WHY: The reasons, causes, motivations, and context behind the story
-- HOW: The process, methods, or mechanisms involved
-- IMPACT: Consequences, implications, or significance of the news
-- QUOTES: Important quotes from key sources if available
-- NUMBERS: Specific statistics, figures, amounts, or data points
-- BACKGROUND: Relevant context that helps understand the story
-
-CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE EXACTLY:
-1. Your summary must contain ONLY the synthesized description of the news story
-2. Do NOT include the article title anywhere in your summary
-3. Do NOT mention source names (Guardian, GDELT, Currents, Reuters, AP, BBC, etc.)
-4. Do NOT include references like "[GUARDIAN]", "[SOURCE]", or "[Article 1]"
-5. Do NOT include phrases like "According to [source]" or "From [source]"
-6. Do NOT include any metadata, formatting markers, or attribution
-7. Write in engaging, clear prose that stands alone without any source attribution or title references
-
-Start your summary directly with the story content. Do not preface it with the title or source.
-
-Article Content:\n${text}`
-            }
+          {
+            role: 'user',
+            content: `You are summarizing a single news article. Create a 6–10 sentence, detailed summary that covers who, what, when, where, why, how, and impact. Do NOT repeat the title or mention sources.\n\nArticle Content:\n${text}`
+          }
         ],
         max_tokens: 1000,
         temperature: 0.4
       },
       {
-        headers: headers,
+        headers,
         timeout: 30000
       }
     );
 
-    console.log('[Summarize] API response status:', response.status);
-    console.log('[Summarize] Response structure:', {
-      hasData: !!response.data,
-      hasChoices: !!response.data?.choices,
-      choicesLength: response.data?.choices?.length || 0
-    });
-
-    // Extract summary from OpenRouter response
     let aiSummary = null;
     if (response.data && response.data.choices && response.data.choices.length > 0) {
       const firstChoice = response.data.choices[0];
       if (firstChoice.message && firstChoice.message.content) {
         aiSummary = firstChoice.message.content.trim();
-        console.log('[Summarize] Successfully extracted summary, length:', aiSummary.length);
-      } else {
-        console.error('[Summarize] Response missing message.content:', JSON.stringify(firstChoice, null, 2));
       }
-    } else {
-      console.error('[Summarize] Unexpected response structure:', JSON.stringify(response.data, null, 2));
     }
 
     if (!aiSummary || aiSummary.length === 0) {
-      console.error('[Summarize] Failed to extract valid summary from API response');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to extract summary from API response',
         aiSummary: 'Error: The AI service returned an invalid response. Please try again later.'
       });
     }
 
-    // Clean summary: Remove any source names, titles, or reference markers
     aiSummary = aiSummary
-      // Remove source references like [GUARDIAN], [GDELT], [CURRENTS], etc.
       .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
-      // Remove patterns like "According to [SOURCE]" or "From [SOURCE]"
       .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
-      // Remove standalone source names in brackets
       .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
-      // Remove title references if they appear
       .replace(/title:\s*["'][^"']*["']/gi, '')
-      // Clean up extra whitespace
       .replace(/\s+/g, ' ')
       .trim();
 
-    console.log('[Summarize] Returning cleaned summary to frontend, length:', aiSummary.length);
     return res.json({ aiSummary });
-
   } catch (error) {
-    console.error('[Summarize] ========================================');
-    console.error('[Summarize] ERROR in summarize endpoint');
-    console.error('[Summarize] Error type:', error.constructor.name);
-    console.error('[Summarize] Error message:', error.message);
-    console.error('[Summarize] Error code:', error.code);
-    if (error.response) {
-      console.error('[Summarize] API response status:', error.response.status);
-      console.error('[Summarize] API response headers:', error.response.headers);
-      console.error('[Summarize] API response data:', JSON.stringify(error.response.data, null, 2));
-      
-      // OpenRouter error handling
-      if (error.response.data) {
-        if (error.response.status === 401) {
-          console.error('[Summarize] OpenRouter: Authentication failed - check API key');
-        } else if (error.response.status === 402) {
-          console.error('[Summarize] OpenRouter: Insufficient credits');
-        } else if (error.response.status === 429) {
-          console.error('[Summarize] OpenRouter: Rate limit exceeded');
-        }
-      }
-    }
-    if (error.request) {
-      console.error('[Summarize] Request was made but no response received');
-      console.error('[Summarize] Request URL:', error.config?.url);
-      console.error('[Summarize] Request method:', error.config?.method);
-      console.error('[Summarize] Request headers:', error.config?.headers ? Object.keys(error.config.headers) : []);
-    }
-    console.error('[Summarize] ========================================');
-    
-    // Extract detailed error message
-    let errorMessage = 'Unable to generate summary. Please try again later.';
+    console.error('[Summarize] ERROR in summarize endpoint:', error.message);
+    let errorMessage = error.message || 'Unable to generate summary. Please try again later.';
+
     if (error.response?.data) {
-      // Extract error from OpenRouter response
       if (error.response.data.error) {
         if (typeof error.response.data.error === 'string') {
           errorMessage = error.response.data.error;
@@ -870,54 +1082,172 @@ Article Content:\n${text}`
         }
       } else if (error.response.data.message) {
         errorMessage = error.response.data.message;
-      } else if (typeof error.response.data === 'string') {
-        errorMessage = error.response.data;
-      } else {
-        // Try to extract any error information
-        errorMessage = JSON.stringify(error.response.data);
       }
-      
-      // Add status code context
-      if (error.response.status === 401) {
-        errorMessage = `Authentication failed: ${errorMessage}. Please check your API key.`;
-      } else if (error.response.status === 402) {
-        errorMessage = `Insufficient credits: ${errorMessage}. Please add credits to your OpenRouter account.`;
-      } else if (error.response.status === 429) {
-        errorMessage = `Rate limit exceeded: ${errorMessage}. Please try again later.`;
-      }
-    } else if (error.message) {
-      errorMessage = error.message;
     }
-    
-    return res.status(500).json({ 
+
+    return res.status(500).json({
       error: 'Failed to generate summary',
       aiSummary: errorMessage
     });
   }
 });
 
-// Health check endpoint
+// =====================================================================
+// 4) MULTI-ARTICLE SEARCH SUMMARY
+//    POST /api/summarize/search   (used by search_results_loader.js)
+// =====================================================================
+app.post('/api/summarize/search', async (req, res) => {
+  try {
+    const { query, articles } = req.body || {};
+    console.log('[Search Summarize] Request received:', {
+      query,
+      articleCount: Array.isArray(articles) ? articles.length : 0
+    });
+
+    if (!Array.isArray(articles) || articles.length === 0) {
+      return res.status(400).json({
+        error: 'No articles provided for summarization',
+        aiSummary: 'Error: No articles provided for summarization.'
+      });
+    }
+
+    // Build a big text blob from all articles (title + source + content)
+    const combinedText = articles
+      .map((a, idx) => {
+        const title = a.title || `Article ${idx + 1}`;
+        const src = a.source || a.sourceName || 'Unknown Source';
+        const date = a.publishedAt || '';
+        const content =
+          a.content || a.description || a.trailText || a.bodyText || '';
+
+        return `### Article ${idx + 1}\nTitle: ${title}\nSource: ${src}\nPublished: ${date}\n\n${content}\n`;
+      })
+      .join('\n\n');
+
+    if (!OPENROUTER_API_KEY) {
+      console.warn(
+        '[Search Summarize] No OpenRouter API key – using simple fallback summary'
+      );
+      const sentences = combinedText
+        .split(/[.!?]+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      const fallback = sentences.slice(0, 10).join('. ') + '.';
+      return res.json({
+        aiSummary:
+          fallback ||
+          'Summary not available. Please read the individual articles for details.'
+      });
+    }
+
+    let modelToUse = LLM_MODEL;
+    if (!modelToUse.includes('/')) {
+      modelToUse = `openai/${modelToUse}`;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:4000',
+      'X-Title': 'Multi-Source Search Summary'
+    };
+
+    const response = await axios.post(
+      LLM_API_URL,
+      {
+        model: modelToUse,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an expert news analyst that synthesizes multiple related articles into one clear, neutral, information-dense summary.'
+          },
+          {
+            role: 'user',
+            content: `You are summarizing multiple news articles related to the search topic "${query}". Create a single, comprehensive summary (about 18–25 sentences) that synthesizes ALL articles together. Cover who, what, when, where, why, how, background, and impact. Do NOT repeat any article titles or mention specific sources.\n\nHere is the combined article content:\n\n${combinedText}`
+          }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3
+      },
+      { headers, timeout: 30000 }
+    );
+
+    let aiSummary = null;
+    if (response.data && response.data.choices && response.data.choices.length > 0) {
+      const firstChoice = response.data.choices[0];
+      if (firstChoice.message && firstChoice.message.content) {
+        aiSummary = firstChoice.message.content.trim();
+      }
+    }
+
+    if (!aiSummary || aiSummary.length === 0) {
+      return res.status(500).json({
+        error: 'Failed to extract summary from API response',
+        aiSummary: 'Error: The AI service returned an invalid response.'
+      });
+    }
+
+    aiSummary = aiSummary
+      .replace(/\[(?:GUARDIAN|GDELT|CURRENTS|SOURCE|ARTICLE)\s*[-\s]*\d*\s*\]/gi, '')
+      .replace(/(?:according to|from|via|source:)\s*\[?[^\]]*\]?/gi, '')
+      .replace(/\[[^\]]*(?:guardian|gdelt|currents|source|article)[^\]]*\]/gi, '')
+      .replace(/title:\s*["'][^"']*["']/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return res.json({ aiSummary });
+  } catch (error) {
+    console.error('[Search Summarize] ERROR:', error.message);
+    let errorMessage =
+      error.message || 'Unable to generate search summary. Please try again later.';
+    if (error.response?.data) {
+      if (error.response.data.error) {
+        if (typeof error.response.data.error === 'string') {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.error.message) {
+          errorMessage = error.response.data.error.message;
+        } else {
+          errorMessage = JSON.stringify(error.response.data.error);
+        }
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+    }
+    return res.status(500).json({
+      error: 'Failed to generate search summary',
+      aiSummary: errorMessage
+    });
+  }
+});
+
+// =====================================================================
+// Health + error handlers
+// =====================================================================
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+// =====================================================================
 // Start server
+// =====================================================================
 app.listen(PORT, () => {
+  console.log('========================================');
   console.log(`Guardian API Proxy Server running on port ${PORT}`);
   console.log(`API Key configured: ${GUARDIAN_API_KEY ? 'Yes' : 'No (Mock Mode)'}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
   console.log(
     `Aggregate example: http://localhost:${PORT}/api/news/aggregate?category=world&limit=6`
   );
+  console.log('Search example:  http://localhost:' + PORT + '/api/search?q=technology');
+  console.log('========================================');
 });
